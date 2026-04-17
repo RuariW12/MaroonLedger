@@ -162,3 +162,109 @@ This layer holds the application's persistent state and the sensitive configurat
 **Role in this architecture.** The RDS master credentials and any third-party API keys live in Secrets Manager, encrypted with a customer-managed KMS key. The ECS task role grants read access to specific secret ARNs, and tasks retrieve the values at container startup via the Secrets Manager VPC Endpoint rather than over the public internet. Automatic rotation is configured for the RDS credential, triggering a Lambda-backed rotation every 30 days without application-side changes.
 
 **Why this choice.** The alternative — hardcoding credentials in environment variables or baking them into container images — is one of the most common sources of credential leakage in cloud applications. Secrets Manager keeps credentials out of source control, out of images, and out of logs, while giving a clear audit trail of every access through CloudTrail. Automatic rotation for RDS is the feature that justifies Secrets Manager over the cheaper SSM Parameter Store, which lacks native rotation support.
+
+## Layer 6: Observability & Operations
+
+This layer covers the services that make the application debuggable, auditable, and defensible in production. None of these services sit in the traffic path — they observe it, record it, and alert on it. The layer is built from four services: **Amazon CloudWatch** for metrics and logs, **AWS CloudTrail** for API-level audit logging, **Amazon GuardDuty** for threat detection, and **AWS KMS** for encryption key management.
+
+### Amazon CloudWatch
+
+**What it is.** CloudWatch is AWS's native monitoring service, combining metrics, logs, alarms, and dashboards into a single platform.
+
+**Role in this architecture.** CloudWatch ingests metrics from every AWS service in the stack — ALB request counts and latencies, ECS task CPU and memory, RDS connection counts and storage, NAT Gateway throughput — and application logs shipped from ECS tasks via CloudWatch Logs. Log groups are scoped per service with 30-day retention for hot storage, and alarms trigger on SLO-relevant thresholds (5xx error rate, ECS task failures, RDS CPU saturation, ALB target health) with notifications routed to an SNS topic.
+
+**Why this choice.** CloudWatch is the default observability surface for AWS workloads, and using it keeps the operational story inside a single service rather than stitching together a third-party stack. Metrics are collected automatically for most services without additional instrumentation, and CloudWatch Logs integrates natively with ECS via the `awslogs` log driver. A production deployment would eventually add Container Insights or a third-party APM tool for deeper tracing, but CloudWatch alone covers the essentials.
+
+### AWS CloudTrail
+
+**What it is.** CloudTrail is AWS's audit service, recording every API call made in the account — who made it, when, from where, and what it changed.
+
+**Role in this architecture.** An organization-wide CloudTrail trail captures all management-plane API activity and delivers it to a dedicated S3 bucket with log file validation enabled. Ninety days of recent activity are queryable directly in the CloudTrail console, and the S3 bucket retains events long-term for compliance. CloudTrail also feeds directly into GuardDuty as one of its primary analysis sources.
+
+**Why this choice.** CloudTrail is the first service a security auditor asks about, and enabling it is effectively required for any production AWS workload. The first trail per account is free, log file validation prevents tampering, and centralizing the S3 destination makes it straightforward to extend into a multi-account setup later. The audit trail is also what makes incident response possible — without it, there's no way to reconstruct who did what during a breach.
+
+### Amazon GuardDuty
+
+**What it is.** GuardDuty is AWS's managed threat detection service, continuously analyzing CloudTrail events, VPC Flow Logs, and DNS query logs to identify malicious or anomalous activity.
+
+**Role in this architecture.** GuardDuty runs in the account with all three log sources enabled, generating findings for patterns such as credential exfiltration, cryptocurrency mining on EC2 instances, communication with known-malicious IPs, and anomalous API call patterns. Findings are categorized by severity (low, medium, high) and routed through EventBridge, with high-severity findings triggering an SNS alert for immediate response.
+
+**Why this choice.** GuardDuty is the AWS-native intrusion detection story, and it's cheap enough (~$3–10/month at this scale) to be a default enable on any account that holds real data. It doesn't replace a full SIEM, but it catches the most common cloud-specific attack patterns — compromised IAM credentials, mining workloads on stolen capacity, reconnaissance from known-bad IPs — without requiring any agent deployment or log pipeline work.
+
+### AWS KMS
+
+**What it is.** KMS is AWS's key management service, creating and managing encryption keys used by virtually every AWS service that supports encryption at rest.
+
+**Role in this architecture.** A customer-managed KMS key encrypts RDS storage and automated backups, S3 bucket contents, Secrets Manager values, EBS volumes on the EC2 container hosts, and selected CloudWatch log groups. Automatic annual rotation is enabled on the key, and key usage is logged to CloudTrail, producing an auditable record of every cryptographic operation.
+
+**Why this choice.** Using a customer-managed key rather than the AWS-managed default provides control over key policies, rotation cadence, and cross-account access — all of which matter in real compliance contexts even when the underlying cryptography is identical. A single key simplifies the encryption story for this project's scope; a production multi-tenant deployment would typically separate keys by data classification or service boundary.
+
+
+---------------------------------------------------------------------------------------------------
+## Security Model
+
+Security in this architecture is built on **defense in depth**: no single control is trusted to protect the system on its own. Each tier enforces its own boundary, each service runs with least-privilege permissions, and sensitive data is protected at every point it's stored or moved.
+
+### Network Isolation
+
+The network enforces least privilege through subnet boundaries, route tables, and **security group chaining**. Rather than referencing IP ranges, each security group references the SG of the tier permitted to call it:
+
+| Security Group | Inbound Source | Port | Purpose |
+|---|---|---|---|
+| `alb-sg` | CloudFront prefix list | 443 | Accept HTTPS only from CloudFront edges |
+| `ecs-sg` | `alb-sg` | 8080 | Accept app traffic only from the ALB |
+| `rds-sg` | `ecs-sg` | 5432 | Accept DB traffic only from ECS tasks |
+| `vpce-sg` | `ecs-sg` | 443 | Accept endpoint traffic only from ECS tasks |
+
+Each tier trusts only the tier directly above it, which contains the blast radius of any single compromise. Rules reference SGs instead of CIDRs so they adapt automatically as resources scale.
+
+The CloudFront prefix list is the one non-chained source — CloudFront doesn't live in the VPC and has no SG to reference. AWS publishes a managed list of CloudFront's origin IPs, and restricting the ALB to it prevents direct-to-ALB attacks that bypass the edge.
+
+### Identity and Access
+
+User identity is handled by **Cognito**: users authenticate through the Hosted UI, receive a JWT, and the ECS tasks validate that JWT on every request.
+
+Service identity is handled by **IAM roles**, each scoped to the minimum permissions needed. The ECS task role grants specific secret reads, log writes, and S3 access — nothing more. The ECS task execution role is kept separate from the task role so application code can't access permissions meant for the ECS agent (image pulls, log group creation). Keeping these distinct is a standard but frequently-missed ECS practice.
+
+### Data Protection
+
+All data at rest is encrypted with a **customer-managed KMS key** — RDS storage and backups, S3 buckets, Secrets Manager values, and EBS volumes on the container hosts. The key has automatic annual rotation enabled, and every use is logged to CloudTrail.
+
+All data in transit is encrypted with TLS — user to CloudFront (TLS 1.2+ with ACM), CloudFront to ALB (HTTPS-only origin policy), ECS to RDS (`sslmode=require`), and ECS to AWS APIs (native TLS via VPC Endpoints). The one unencrypted segment is ALB to ECS, inside the VPC and inside a trust boundary — adding TLS there would require certificate management in each container for no threat-model improvement.
+
+### Secrets
+
+Application credentials live exclusively in **Secrets Manager**, encrypted with the KMS key, retrieved at container startup via the Secrets Manager VPC Endpoint. Automatic rotation is configured for the RDS credential. No credentials exist in source control, container images, or environment variables.
+
+### Edge Protection
+
+**WAF** is attached to CloudFront via a Web ACL, with managed rule groups covering the OWASP Top 10, known bad inputs, and IP reputation, plus a custom rate-limit rule (2,000 requests per 5 minutes per IP). **Shield Standard** is included automatically and provides baseline DDoS protection at the edge. Edge protection is the first layer, never the only one — the SG chain assumes WAF could be bypassed and still rejects unauthorized traffic at the ALB.
+
+### Audit and Detection
+
+**CloudTrail** records every API call in the account and delivers events to a dedicated S3 bucket with log file validation enabled. **GuardDuty** analyzes those events (plus VPC Flow Logs and DNS logs) for malicious patterns — credential exfiltration, cryptocurrency mining, communication with known-bad IPs — and routes high-severity findings to SNS for response. CloudTrail provides the record; GuardDuty provides the interpretation.
+
+
+---------------------------------------------------------------------------------------------------
+
+## Tech Stack
+
+- **Go** — backend language. Chosen for its concurrency model, low memory footprint, and fast startup times, all of which play well with containerized workloads on ECS. Also forces explicit error handling and straightforward HTTP server code, both of which matter when the goal is writing production-grade services.
+- **React** — frontend framework. The default choice for a modern SPA, served as a static bundle from S3 behind CloudFront. No server-side rendering; the API lives in Go and the frontend is pure client-side.
+- **PostgreSQL** — relational database, managed via RDS. Chosen over MySQL for richer type support (JSONB, arrays, full-text search) and stronger constraints — both useful for financial data.
+
+### Infrastructure
+
+- **Terraform** — infrastructure as code. Chosen over CDK for its cloud-agnostic design, mature module ecosystem, and explicit state model — all of which make it the more portable skill across employers. Every AWS resource in this project is declared in Terraform; nothing is created manually in the console.
+- **Amazon Linux 2023** — container base image. AWS-maintained, optimized for running on EC2 and ECS, and receives security patches through the AWS update channel. Keeps the base layer small and aligned with the host OS on the container instances.
+- **Amazon ECR** — container registry. Private, integrated with ECS task definitions by ARN, and reachable from the VPC via an Interface Endpoint rather than the public internet.
+
+### Supporting Tools
+
+- **Bash** — for repo-local scripting: build wrappers, local Terraform helpers, container entrypoints, and glue around the AWS CLI. Kept minimal and POSIX-compatible where possible.
+- **AWS CLI** — for local interaction with the account during development, and for anything not yet managed through Terraform (one-off investigations, manual validation of deployed resources).
+- **Git + GitHub** — version control and remote hosting. The repository is structured as a monorepo, with separate top-level directories for the Go backend, the React frontend, and the Terraform configuration.
+
+### Planned Additions
+
+- **GitHub Actions** — CI/CD pipeline for automated builds, tests, container image pushes to ECR, and Terraform plan/apply workflows. Not yet implemented; this is the next major piece of work on the infrastructure side.
