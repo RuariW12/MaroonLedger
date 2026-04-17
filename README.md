@@ -41,3 +41,18 @@ This layer is the public entry point for the application: resolving the domain, 
 **Role in this architecture.** WAF attaches to the CloudFront distribution via a Web ACL, evaluating every request at the edge. Attacks get blocked before they reach S3 or the ALB, and both origins are protected under one policy.
 
 **Why this choice.** Edge-deployed WAF rejects attacks closer to the source and benefits from CloudFront's caching, which lowers evaluation volume and cost. It also layers cleanly with Shield Standard for volumetric protection.
+
+
+## Layer 2: Identity
+
+This layer handles user authentication and session management, sitting alongside the edge layer as part of the user-facing surface. It's built around a single service: **Amazon Cognito**.
+
+### Amazon Cognito
+
+**What it is.** AWS's managed identity service, providing user directories, authentication flows, and token issuance via OAuth 2.0 and OIDC.
+
+**Role in this architecture.** Cognito is the first thing a user interacts with. A Cognito User Pool handles sign-up, sign-in, password resets, and MFA enrollment through Cognito's Hosted UI, and issues a JWT on successful authentication. The frontend attaches that JWT to API calls, and the ECS tasks validate it against Cognito's JWKS endpoint before serving the request.
+
+**Why this choice.** Cognito removes the need to build and maintain a custom auth stack — password hashing, session storage, MFA, token rotation, account recovery — while still integrating natively with the rest of the AWS ecosystem. The Hosted UI handles the login page out of the box, removing the need to implement Cognito's SRP auth flow in the frontend. A self-hosted solution would mean more infrastructure to secure and audit for no meaningful gain on a project this size.
+
+
