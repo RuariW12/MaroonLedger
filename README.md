@@ -10,7 +10,7 @@ This project was built to demonstrate hands-on experience with the full AWS serv
 
 # Architecture
 
-![MaroonLedger Architecture Diagram](docs/images/cep-v1.png)
+![MaroonLedger Architecture Diagram](docs/images/cloud-project-diagram-v1.png)
 
 # Architecture Walkthrough
 
