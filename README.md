@@ -1,4 +1,4 @@
-# MaroonLedger
+# MaroonLedger 🍁
 
 *A production-grade personal finance platform on AWS — built to develop hands-on expertise across cloud engineering, DevOps, security, and networking.*
 
