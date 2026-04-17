@@ -6,6 +6,19 @@
 
 This project was built to demonstrate hands-on experience with the full AWS service ecosystem — from networking and container orchestration to identity, observability, and infrastructure-as-code — in a realistic, resume-ready portfolio piece
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Layer Walkthrough](#layer-walkthrough)
+  - [Layer 1: DNS & Edge](#layer-1-dns--edge)
+  - [Layer 2: Identity](#layer-2-identity)
+  - [Layer 3: Networking](#layer-3-networking)
+  - [Layer 4: Compute](#layer-4-compute)
+  - [Layer 5: Data](#layer-5-data)
+  - [Layer 6: Observability & Operations](#layer-6-observability--operations)
+- [Security Model](#security-model)
+- [Tech Stack](#tech-stack)
+- [Planned Additions](#planned-additions)
 ---------------------------------------------------------------------------------------------------
 
 # Architecture
