@@ -1,1 +1,26 @@
 notes/
+
+# AWS
+.aws/
+aws.json
+*.pem
+*.ppk
+
+# Credentials & secrets
+.env
+.env.*
+!.env.example
+*.key
+*.secret
+credentials
+credentials.json
+secrets.json
+config.json
+
+# Terraform (if you end up using it)
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
