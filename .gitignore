@@ -17,10 +17,9 @@ credentials.json
 secrets.json
 config.json
 
-# Terraform (if you end up using it)
+# Terraform
 *.tfstate
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
 .terraform/
-.terraform.lock.hcl
