@@ -1,20 +1,19 @@
-module "ecs_cluster" {
-  source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.0"
-
-  cluster_name = "${var.project_name}-cluster"
-
-  fargate_capacity_providers = {
-    FARGATE = {
-      default_capacity_provider_strategy = {
-        weight = 100
-      }
-    }
-  }
+resource "aws_ecs_cluster" "main" {
+  name = "${var.project_name}-cluster"
 
   tags = {
     Terraform   = "true"
     Environment = "dev"
+  }
+}
+
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name       = aws_ecs_cluster.main.name
+  capacity_providers = ["FARGATE"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 100
   }
 }
 
@@ -66,7 +65,7 @@ resource "aws_ecs_task_definition" "app" {
 
 resource "aws_ecs_service" "app" {
   name            = "${var.project_name}-service"
-  cluster         = module.ecs_cluster.cluster_id
+  cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 2
   launch_type     = "FARGATE"
