@@ -23,3 +23,5 @@ config.json
 *.tfvars
 !*.tfvars.example
 .terraform/
+tfplan
+*.tfplan
