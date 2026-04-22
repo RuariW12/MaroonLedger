@@ -9,6 +9,7 @@ terraform {
   }
 }
 
+# used for WAF
 provider "aws" {
   region = var.region
 }
