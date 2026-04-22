@@ -5,13 +5,6 @@ variable "project_name" {
   default     = "maroon-ledger"
 }
 
-
-variable "project_name" {
-  description = "Project name used to prefix resource names"
-  type        = string
-  default     = "maroon-ledger"
-}
-
 variable "database_subnet_group_name" {
   description = "Name of the database subnet group from VPC module"
   type        = string
