@@ -46,6 +46,10 @@ module "cdn" {
   source       = "../../modules/cdn"
   project_name = var.project_name
   alb_dns_name = module.alb.alb_dns_name
+
+  providers = {
+    aws = aws.us_east_1
+  }
 }
 
 module "observability" {
