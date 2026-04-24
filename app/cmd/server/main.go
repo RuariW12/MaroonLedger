@@ -2,22 +2,46 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/RuariW12/MaroonLedger/internal/database"
+	"github.com/RuariW12/MaroonLedger/internal/handlers"
 )
 
 func main() {
+	host := getEnv("DB_HOST", "localhost")
+	port := getEnv("DB_PORT", "5432")
+	user := getEnv("DB_USER", "postgres")
+	password := getEnv("DB_PASSWORD", "postgres")
+	dbname := getEnv("DB_NAME", "maroonledger")
+
+	db, err := database.Connect(host, port, user, password, dbname)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	accountHandler := &handlers.AccountHandler{DB: db}
+	transactionHandler := &handlers.TransactionHandler{DB: db}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	mux.HandleFunc("GET /api/accounts", accountHandler.List)
+	mux.HandleFunc("GET /api/accounts/{id}", accountHandler.Get)
+	mux.HandleFunc("POST /api/accounts", accountHandler.Create)
+
+	mux.HandleFunc("GET /api/accounts/{accountId}/transactions", transactionHandler.ListByAccount)
+	mux.HandleFunc("POST /api/accounts/{accountId}/transactions", transactionHandler.Create)
 
 	server := &http.Server{
 		Addr:         ":3000",
@@ -48,4 +72,11 @@ func main() {
 	}
 
 	log.Println("Server exited")
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
