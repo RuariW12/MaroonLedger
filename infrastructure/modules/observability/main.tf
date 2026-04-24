@@ -1,5 +1,6 @@
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.project_name}-cloudtrail-logs"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
@@ -83,6 +84,7 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 resource "aws_s3_bucket" "config" {
   bucket = "${var.project_name}-config-logs"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_policy" "config" {
