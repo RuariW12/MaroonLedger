@@ -23,6 +23,8 @@ module "rds" {
   password = random_password.db_password.result
   port     = 5432
 
+  manage_master_user_password = false
+
   multi_az               = true
   db_subnet_group_name   = var.database_subnet_group_name
   vpc_security_group_ids = [var.rds_security_group_id]
