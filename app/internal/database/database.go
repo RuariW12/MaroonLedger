@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
@@ -15,7 +15,7 @@ func Connect(host, port, user, password, dbname string) (*sql.DB, error) {
 		host, port, user, password, dbname,
 	)
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
