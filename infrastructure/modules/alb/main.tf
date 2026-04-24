@@ -10,6 +10,7 @@ module "alb" {
   subnets = var.public_subnet_ids
 
   security_groups = [var.alb_security_group_id]
+  create_security_group = false
 
   listeners = {
     http = {
