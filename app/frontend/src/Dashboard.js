@@ -19,87 +19,101 @@ function Dashboard({ onSelectAccount }) {
     setShowForm(false);
   };
 
-  const typeColors = {
-    checking: 'bg-blue-100 text-blue-800',
-    savings: 'bg-green-100 text-green-800',
-    credit: 'bg-red-100 text-red-800',
-    loan: 'bg-yellow-100 text-yellow-800',
-  };
-
   const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+  const accountCount = accounts.length;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">MaroonLedger</h1>
-        <p className="text-gray-500 mt-1">Personal Finance Dashboard</p>
+    <div className="main-content">
+      <div className="page-header">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-subtitle">Overview of your financial accounts</p>
       </div>
 
-      <div className="bg-gray-900 text-white rounded-lg p-6 mb-8">
-        <p className="text-sm text-gray-400">Total Balance</p>
-        <p className="text-4xl font-bold">${total.toFixed(2)}</p>
+      <div className="summary-row">
+        <div className="summary-card">
+          <p className="summary-label">Total Balance</p>
+          <p className={`summary-value ${total >= 0 ? 'green' : 'red'}`}>
+            ${total.toFixed(2)}
+          </p>
+        </div>
+        <div className="summary-card">
+          <p className="summary-label">Accounts</p>
+          <p className="summary-value">{accountCount}</p>
+        </div>
+        <div className="summary-card">
+          <p className="summary-label">Status</p>
+          <p className="summary-value green">Active</p>
+        </div>
       </div>
 
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Accounts</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-        >
+      <div className="section-header">
+        <h2 className="section-title">Accounts</h2>
+        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ New Account'}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
-          <input
-            type="text"
-            placeholder="Account name"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2"
-            required
-          />
-          <select
-            value={form.type}
-            onChange={e => setForm({ ...form, type: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2"
-          >
-            <option value="checking">Checking</option>
-            <option value="savings">Savings</option>
-            <option value="credit">Credit</option>
-            <option value="loan">Loan</option>
-          </select>
-          <input
-            type="number"
-            placeholder="Starting balance"
-            value={form.balance}
-            onChange={e => setForm({ ...form, balance: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2"
-            step="0.01"
-          />
-          <button type="submit" className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
-            Create Account
-          </button>
-        </form>
+        <div className="form-container">
+          <form onSubmit={handleSubmit}>
+            <div className="form-grid">
+              <div className="form-field">
+                <label className="form-label">Account Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Primary Checking"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label">Account Type</label>
+                <select
+                  value={form.type}
+                  onChange={e => setForm({ ...form, type: e.target.value })}
+                  className="form-select"
+                >
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                  <option value="credit">Credit</option>
+                  <option value="loan">Loan</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-grid single">
+              <div className="form-field">
+                <label className="form-label">Starting Balance</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={form.balance}
+                  onChange={e => setForm({ ...form, balance: e.target.value })}
+                  className="form-input"
+                  step="0.01"
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary">Create Account</button>
+          </form>
+        </div>
       )}
 
-      <div className="grid gap-4">
+      <div className="accounts-grid">
         {accounts.map(account => (
           <div
             key={account.id}
+            className="account-card"
             onClick={() => onSelectAccount(account)}
-            className="bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
           >
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-semibold text-lg">{account.name}</h3>
-                <span className={`text-xs px-2 py-1 rounded-full ${typeColors[account.type]}`}>
-                  {account.type}
-                </span>
-              </div>
-              <p className="text-2xl font-bold">${account.balance.toFixed(2)}</p>
+            <div>
+              <p className="account-name">{account.name}</p>
+              <span className={`account-type type-${account.type}`}>
+                {account.type}
+              </span>
             </div>
+            <p className="account-balance">${account.balance.toFixed(2)}</p>
           </div>
         ))}
       </div>
