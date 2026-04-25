@@ -50,6 +50,10 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := database.Migrate(db); err != nil {
+			log.Fatalf("Failed to run migrations: %v", err)
+		}
+
 	accountHandler := &handlers.AccountHandler{DB: db}
 	transactionHandler := &handlers.TransactionHandler{DB: db}
 
