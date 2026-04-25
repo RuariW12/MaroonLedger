@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,11 +16,31 @@ import (
 )
 
 func main() {
-	host := getEnv("DB_HOST", "localhost")
-	port := getEnv("DB_PORT", "5432")
-	user := getEnv("DB_USER", "postgres")
-	password := getEnv("DB_PASSWORD", "postgres")
-	dbname := getEnv("DB_NAME", "maroonledger")
+	var host, port, user, password, dbname string
+
+	if creds := os.Getenv("DB_CREDENTIALS"); creds != "" {
+		var parsed struct {
+			Host     string `json:"host"`
+			Port     int    `json:"port"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			DBName   string `json:"dbname"`
+		}
+		if err := json.Unmarshal([]byte(creds), &parsed); err != nil {
+			log.Fatalf("Failed to parse DB_CREDENTIALS: %v", err)
+		}
+		host = parsed.Host
+		port = strconv.Itoa(parsed.Port)
+		user = parsed.Username
+		password = parsed.Password
+		dbname = parsed.DBName
+	} else {
+		host = getEnv("DB_HOST", "localhost")
+		port = getEnv("DB_PORT", "5432")
+		user = getEnv("DB_USER", "postgres")
+		password = getEnv("DB_PASSWORD", "postgres")
+		dbname = getEnv("DB_NAME", "maroonledger")
+	}
 
 	db, err := database.Connect(host, port, user, password, dbname)
 	if err != nil {
