@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	var host, port, user, password, dbname string
+	var host, port, user, password, dbname, sslmode string
 
 	if creds := os.Getenv("DB_CREDENTIALS"); creds != "" {
 		var parsed struct {
@@ -34,15 +34,17 @@ func main() {
 		user = parsed.Username
 		password = parsed.Password
 		dbname = parsed.DBName
+		sslmode = "require"
 	} else {
 		host = getEnv("DB_HOST", "localhost")
 		port = getEnv("DB_PORT", "5432")
 		user = getEnv("DB_USER", "postgres")
 		password = getEnv("DB_PASSWORD", "postgres")
 		dbname = getEnv("DB_NAME", "maroonledger")
+		sslmode = "disable"
 	}
 
-	db, err := database.Connect(host, port, user, password, dbname)
+	db, err := database.Connect(host, port, user, password, dbname, sslmode)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
