@@ -17,5 +17,5 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_transactions_account_id ON transactions(account_id);
-CREATE INDEX idx_transactions_date ON transactions(date);
+CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
