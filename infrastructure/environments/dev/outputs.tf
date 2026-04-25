@@ -17,3 +17,8 @@ output "frontend_bucket_name" {
   description = "S3 bucket for frontend deployment"
   value       = module.cdn.frontend_bucket_name
 }
+
+output "ecr_repository_url" {
+  description = "ECR repository URL for pushing images"
+  value       = module.ecr.repository_url
+}
