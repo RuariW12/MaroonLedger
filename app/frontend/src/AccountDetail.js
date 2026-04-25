@@ -22,16 +22,42 @@ function AccountDetail({ account, onBack }) {
     setShowForm(false);
   };
 
+  const totalSpent = transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0);
+  const totalReceived = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+
   return (
     <div className="main-content">
       <button className="btn-back" onClick={onBack}>← Back to Dashboard</button>
 
       <div className="detail-header">
         <div>
+          <p className="detail-label">Account</p>
           <h1 className="page-title">{account.name}</h1>
           <span className={`account-type type-${account.type}`}>{account.type}</span>
         </div>
-        <p className="detail-balance">${account.balance.toFixed(2)}</p>
+        <div style={{ textAlign: 'right' }}>
+          <p className="detail-label">Current Balance</p>
+          <p className="detail-balance">${account.balance.toFixed(2)}</p>
+        </div>
+      </div>
+
+      <div className="info-row">
+        <div className="info-item">
+          <span className="info-label">Transactions</span>
+          <span className="info-value">{transactions.length}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Total Received</span>
+          <span className="info-value" style={{ color: 'var(--green)' }}>+${totalReceived.toFixed(2)}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Total Spent</span>
+          <span className="info-value" style={{ color: 'var(--red)' }}>-${Math.abs(totalSpent).toFixed(2)}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Opened</span>
+          <span className="info-value">{new Date(account.created_at).toLocaleDateString()}</span>
+        </div>
       </div>
 
       <div className="section-header">
@@ -43,6 +69,7 @@ function AccountDetail({ account, onBack }) {
 
       {showForm && (
         <div className="form-container">
+          <p className="form-title">Add Transaction</p>
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
               <div className="form-field">
@@ -98,7 +125,9 @@ function AccountDetail({ account, onBack }) {
       <div className="transaction-list">
         {transactions.length === 0 ? (
           <div className="empty-state">
+            <div className="empty-state-icon">◎</div>
             <p>No transactions yet</p>
+            <p className="hint">Add a transaction to start tracking</p>
           </div>
         ) : (
           transactions.map(t => (
