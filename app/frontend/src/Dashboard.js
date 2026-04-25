@@ -21,6 +21,9 @@ function Dashboard({ onSelectAccount }) {
 
   const total = accounts.reduce((sum, a) => sum + a.balance, 0);
   const accountCount = accounts.length;
+  const highestBalance = accounts.length > 0
+    ? Math.max(...accounts.map(a => a.balance))
+    : 0;
 
   return (
     <div className="main-content">
@@ -30,20 +33,32 @@ function Dashboard({ onSelectAccount }) {
       </div>
 
       <div className="summary-row">
-        <div className="summary-card">
+        <div className="summary-card highlight">
           <p className="summary-label">Total Balance</p>
           <p className={`summary-value ${total >= 0 ? 'green' : 'red'}`}>
             ${total.toFixed(2)}
           </p>
+          <p className="summary-change">{accountCount} active account{accountCount !== 1 ? 's' : ''}</p>
         </div>
         <div className="summary-card">
-          <p className="summary-label">Accounts</p>
-          <p className="summary-value">{accountCount}</p>
+          <p className="summary-label">Highest Balance</p>
+          <p className="summary-value">${highestBalance.toFixed(2)}</p>
+          <p className="summary-change">across all accounts</p>
         </div>
         <div className="summary-card">
-          <p className="summary-label">Status</p>
+          <p className="summary-label">System Status</p>
           <p className="summary-value green">Active</p>
+          <p className="summary-change">ECS Fargate · us-east-2</p>
         </div>
+      </div>
+
+      <div className="activity-bar">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className={`activity-segment ${i < accountCount * 3 ? 'filled' : i < accountCount * 5 ? 'filled-light' : ''}`}
+          />
+        ))}
       </div>
 
       <div className="section-header">
@@ -55,6 +70,7 @@ function Dashboard({ onSelectAccount }) {
 
       {showForm && (
         <div className="form-container">
+          <p className="form-title">Create New Account</p>
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
               <div className="form-field">
@@ -101,21 +117,34 @@ function Dashboard({ onSelectAccount }) {
       )}
 
       <div className="accounts-grid">
-        {accounts.map(account => (
-          <div
-            key={account.id}
-            className="account-card"
-            onClick={() => onSelectAccount(account)}
-          >
-            <div>
-              <p className="account-name">{account.name}</p>
-              <span className={`account-type type-${account.type}`}>
-                {account.type}
-              </span>
-            </div>
-            <p className="account-balance">${account.balance.toFixed(2)}</p>
+        {accounts.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">◫</div>
+            <p>No accounts yet</p>
+            <p className="hint">Create your first account to get started</p>
           </div>
-        ))}
+        ) : (
+          accounts.map(account => (
+            <div
+              key={account.id}
+              className="account-card"
+              onClick={() => onSelectAccount(account)}
+            >
+              <div className="account-info">
+                <p className="account-name">{account.name}</p>
+                <div className="account-meta">
+                  <span className={`account-type type-${account.type}`}>
+                    {account.type}
+                  </span>
+                  <span className="account-date">
+                    Opened {new Date(account.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+              <p className="account-balance">${account.balance.toFixed(2)}</p>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
