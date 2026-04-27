@@ -48,11 +48,11 @@ function AccountDetail({ account, onBack }) {
         </div>
         <div className="info-item">
           <span className="info-label">Total Received</span>
-          <span className="info-value" style={{ color: 'var(--green)' }}>+${totalReceived.toFixed(2)}</span>
+          <span className="info-value positive">+${totalReceived.toFixed(2)}</span>
         </div>
         <div className="info-item">
           <span className="info-label">Total Spent</span>
-          <span className="info-value" style={{ color: 'var(--red)' }}>-${Math.abs(totalSpent).toFixed(2)}</span>
+          <span className="info-value negative">-${Math.abs(totalSpent).toFixed(2)}</span>
         </div>
         <div className="info-item">
           <span className="info-label">Opened</span>
