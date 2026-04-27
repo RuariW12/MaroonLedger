@@ -6,6 +6,9 @@
 
 This project was built to demonstrate hands-on experience with the full AWS service ecosystem — from networking and container orchestration to identity, observability, and infrastructure-as-code — in a realistic, resume-ready portfolio piece
 
+Screenshots of the working app can be found at /docs/images/
+Additionally, /docs/devlog.md reports a full breakdown of my developer journal, debugging, thought process and decision making.
+
 # Architecture
 
 ![MaroonLedger Architecture Diagram](docs/images/cloud-project-diagram-v1.png)
@@ -41,4 +44,6 @@ Monitoring and compliance with CloudTrail, GuardDuty, and AWS Config
 - Git (version control)
 - tmux, nvim (enhanced efficiency for local production)
 
-
+# Additional
+### CI/CD pipeline
+This is being built as a separate portfolio project — a GitHub Actions pipeline that automates the build, push, deploy, and invalidation workflow documented above.
