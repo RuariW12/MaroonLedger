@@ -10,7 +10,8 @@ This project was built to demonstrate hands-on experience with the full AWS serv
 
 ![MaroonLedger Architecture Diagram](docs/images/cloud-project-diagram-v1.png)
 
-# Architecture Walkthrough
+# Architecture Walkthrougha
+#### For more advanced infrastructure explanation, check /docs/infrastructure.md
 ### **Layer 1: Networking**
 Foundation everything lives on. VPC, 3-tier subnets, (public/private/data), NAT Gateway, route tables
 ### **Layer 2: Security**
@@ -25,9 +26,13 @@ Frontend delivery and protection. Cloudfront, S3 static hosting, WAF
 Monitoring and compliance with CloudTrail, GuardDuty, and AWS Config
 
 # Tech Stack
-### **Infrastructure** - Terraform, AWS
-### **Backend** - Go, PostgreSQL, Docker
-### **Frontend** React, (HTML, CSS, JavaScript)
-### **Tools**: Bash scripting, AWS CLI, Git version control, tmux, vim
+### **Infrastructure**
+Terraform, AWS
+### **Backend**
+Go, PostgreSQL, Docker
+### **Frontend**
+React, (HTML, CSS, JavaScript)
+### **Tools** 
+Bash scripting, AWS CLI, Git version control, tmux, vim
 
 
