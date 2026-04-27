@@ -35,7 +35,7 @@ function Dashboard({ onSelectAccount }) {
       <div className="summary-row">
         <div className="summary-card highlight">
           <p className="summary-label">Total Balance</p>
-          <p className={`summary-value ${total >= 0 ? 'green' : 'red'}`}>
+          <p className={`summary-value ${total >= 0 ? 'positive' : 'negative'}`}>
             ${total.toFixed(2)}
           </p>
           <p className="summary-change">{accountCount} active account{accountCount !== 1 ? 's' : ''}</p>
@@ -47,7 +47,7 @@ function Dashboard({ onSelectAccount }) {
         </div>
         <div className="summary-card">
           <p className="summary-label">System Status</p>
-          <p className="summary-value green">Active</p>
+          <p className="summary-value accent">Active</p>
           <p className="summary-change">ECS Fargate · us-east-2</p>
         </div>
       </div>
