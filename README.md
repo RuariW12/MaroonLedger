@@ -6,15 +6,15 @@
 
 This project was built to demonstrate hands-on experience with the full AWS service ecosystem — from networking and container orchestration to identity, observability, and infrastructure-as-code — in a realistic, resume-ready portfolio piece
 
-Screenshots of the working app can be found at /docs/images/
-Additionally, /docs/devlog.md reports a full breakdown of my developer journal, debugging, thought process and decision making.
+- Screenshots of the working app can be found at /docs/images/
+- Additionally, /docs/devlog.md reports a full breakdown of my developer journal, debugging, thought process and decision making.
 
 # Architecture
 
 ![MaroonLedger Architecture Diagram](docs/images/cloud-project-diagram-v1.png)
 
 # Architecture Walkthrough
-#### For more advanced infrastructure explanation, check /docs/infrastructure.md
+#### For a more advanced infrastructure explanation, check /docs/infrastructure.md
 ### **Layer 1: Networking**
 Foundation everything lives on. VPC, 3-tier subnets, (public/private/data), NAT Gateway, route tables
 ### **Layer 2: Security**
