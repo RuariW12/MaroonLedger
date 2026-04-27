@@ -11,13 +11,54 @@ This project was built to demonstrate hands-on experience with the full AWS serv
 ![MaroonLedger Architecture Diagram](docs/images/cloud-project-diagram-v1.png)
 
 # Architecture Walkthrough
-LayerPurposeKey Resources1 — NetworkingFoundation everything lives onVPC, 3-tier subnets (public/private/data), NAT Gateway, route tables2 — SecurityAccess control and encryptionSecurity group chain (ALB → ECS → RDS), KMS customer-managed key3 — DataPersistent storage and secretsRDS PostgreSQL Multi-AZ, Secrets Manager, automated backups4 — ComputeApplication runtime and ingressECS Fargate cluster, ALB with health checks, IAM roles5 — EdgeFrontend delivery and protectionCloudFront dual-origin, S3 static hosting, WAF with managed rules6 — ObservabilityMonitoring and complianceCloudTrail, GuardDuty, AWS Config
-### Supporting Tools
+**Layer 1: Networking**
+Foundation everything lives on. VPC, 3-tier subnets, (public/private/data), NAT Gateway, route tables
+**Layer 2: Security**
+Access control and encryption. Security group chain, (ALB -> ECS -> RDS). KMS customer managed key
+**Layer 3: Data**
+Persistent storage and secrets. RDS PostgreSQL across 2 AZ's, Secrets Manager, automated backups
+**Layer 4: Compute**
+Application runtime and ingress. ECS Fargate Cluster, ALB with health checks, IAM roles
+**Layer 5: Edge**
+Frontend delivery and protection. Cloudfront, S3 static hosting, WAF
+**Layer 6: Observability**
+Monitoring and compliance with CloudTrail, GuardDuty, and AWS Config
 
-- **Bash** — for repo-local scripting: build wrappers, local Terraform helpers, container entrypoints, and glue around the AWS CLI. Kept minimal and POSIX-compatible where possible.
-- **AWS CLI** — for local interaction with the account during development, and for anything not yet managed through Terraform (one-off investigations, manual validation of deployed resources).
-- **Git + GitHub** — version control and remote hosting. The repository is structured as a monorepo, with separate top-level directories for the Go backend, the React frontend, and the Terraform configuration.
+# Tech Stack
+**Infrastructure** - Terraform, AWS
+**Backend** - Go, PostgreSQL, Docker
+**Frontend** React, (HTML, CSS, JavaScript)
+**Tools**: Bash scripting, AWS CLI, Git version control, tmux, vim
 
-### Planned Additions
+# Project Structure
+cloud-project-v1/
+├── infrastructure/
+│   ├── bootstrap/          # S3 state bucket + DynamoDB lock table
+│   ├── modules/
+│   │   ├── vpc/            # Three-tier VPC across 2 AZs
+│   │   ├── security-groups/# SG chain: ALB → ECS → RDS
+│   │   ├── kms/            # Customer-managed encryption key
+│   │   ├── rds/            # PostgreSQL Multi-AZ + Secrets Manager
+│   │   ├── alb/            # Application Load Balancer + target group
+│   │   ├── ecs/            # Fargate cluster, task def, service, IAM
+│   │   ├── ecr/            # Container image repository
+│   │   ├── cdn/            # CloudFront + S3 frontend + WAF
+│   │   └── observability/  # CloudTrail, GuardDuty, AWS Config
+│   └── environments/
+│       └── dev/            # Wires all modules together
+├── app/
+│   ├── cmd/server/         # Go entrypoint
+│   ├── internal/
+│   │   ├── handlers/       # REST API handlers
+│   │   ├── database/       # Connection pool + migrations
+│   │   └── models/         # Data structures
+│   ├── frontend/           # React dashboard
+│   ├── Dockerfile          # Multi-stage production build
+│   └── docker-compose.yml  # Local dev (Postgres)
+├── docs/
+│   ├── infrastructure.md   # Layer-by-layer infrastructure breakdown
+│   ├── devlog.md           # Build journal with timestamps
+│   └── screenshots/        # Dashboard and deployment screenshots
+└── README.md
 
-- **GitHub Actions** — CI/CD pipeline for automated builds, tests, container image pushes to ECR, and Terraform plan/apply workflows. Not yet implemented; this is the next major piece of work on the infrastructure side.
+
