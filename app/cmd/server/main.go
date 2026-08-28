@@ -16,6 +16,7 @@ import (
 	"github.com/RuariW12/MaroonLedger/internal/auth"
 	"github.com/RuariW12/MaroonLedger/internal/database"
 	"github.com/RuariW12/MaroonLedger/internal/handlers"
+	"github.com/RuariW12/MaroonLedger/internal/pipeline"
 	"github.com/RuariW12/MaroonLedger/internal/ratelimit"
 )
 
@@ -51,8 +52,14 @@ func main() {
 	}
 	log.Printf("AI provider: %s", provider.Name())
 
+	emitter, err := buildEmitter(ctx)
+	if err != nil {
+		log.Fatalf("Failed to initialise data pipeline: %v", err)
+	}
+	log.Printf("Data pipeline: %s", emitter.Name())
+
 	accountHandler := &handlers.AccountHandler{DB: db}
-	transactionHandler := &handlers.TransactionHandler{DB: db, AI: provider}
+	transactionHandler := &handlers.TransactionHandler{DB: db, AI: provider, Emitter: emitter}
 	insightsHandler := &handlers.InsightsHandler{DB: db, AI: provider}
 	summaryHandler := &handlers.SummaryHandler{DB: db}
 
@@ -116,6 +123,13 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
+	// Drained after the server stops accepting requests, so nothing is still
+	// producing events. A failure here is logged rather than fatal: losing
+	// buffered telemetry must not turn a clean shutdown into a crash.
+	if err := emitter.Close(shutdownCtx); err != nil {
+		log.Printf("Data pipeline shutdown: %v", err)
+	}
+
 	log.Println("Server exited")
 }
 
@@ -134,6 +148,25 @@ func buildAIProvider(ctx context.Context) (ai.Provider, error) {
 		})
 	default:
 		return nil, &configError{"AI_PROVIDER must be 'stub' or 'bedrock', got " + provider}
+	}
+}
+
+// buildEmitter selects the analytics backend.
+//
+// Off by default, matching AI_PROVIDER: a missing or misspelled DATA_PIPELINE
+// value yields the no-op emitter rather than silently starting to bill for
+// Firehose ingestion. Enabling it is explicit.
+func buildEmitter(ctx context.Context) (pipeline.Emitter, error) {
+	switch mode := getEnv("DATA_PIPELINE", "off"); mode {
+	case "off":
+		return pipeline.NewDisabled(), nil
+	case "firehose":
+		return pipeline.NewFirehose(ctx, pipeline.FirehoseConfig{
+			StreamName: mustEnv("DATA_PIPELINE_STREAM"),
+			Region:     getEnv("AWS_REGION", "us-east-2"),
+		})
+	default:
+		return nil, &configError{"DATA_PIPELINE must be 'off' or 'firehose', got " + mode}
 	}
 }
 

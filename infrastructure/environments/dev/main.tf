@@ -92,6 +92,14 @@ module "ecs" {
   ai_provider   = var.ai_provider
   bedrock_model = var.bedrock_model
 
+  # Wired from the data stack's outputs, by hand rather than through
+  # terraform_remote_state. Reading the other stack's state would couple them,
+  # and coupling is exactly what must not exist if `terraform destroy` here is
+  # to leave the lake untouched.
+  data_pipeline             = var.data_pipeline
+  data_pipeline_stream_arn  = var.data_pipeline_stream_arn
+  data_pipeline_stream_name = var.data_pipeline_stream_name
+
   # Taken from the Cognito module's outputs rather than hand-assembled, so the
   # issuer the API validates against cannot drift from the pool that mints the
   # tokens.

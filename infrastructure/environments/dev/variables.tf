@@ -83,3 +83,21 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "data_pipeline" {
+  description = "Analytics emitter mode: 'off' or 'firehose'. Off by default; the data stack is a separate root module."
+  type        = string
+  default     = "off"
+}
+
+variable "data_pipeline_stream_arn" {
+  description = "firehose_stream_arn output from the data stack. Empty attaches no Firehose permissions to the task role."
+  type        = string
+  default     = ""
+}
+
+variable "data_pipeline_stream_name" {
+  description = "firehose_stream_name output from the data stack"
+  type        = string
+  default     = ""
+}

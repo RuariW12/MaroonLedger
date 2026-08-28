@@ -88,3 +88,26 @@ variable "db_name" {
   type        = string
   default     = "maroonledger"
 }
+
+variable "data_pipeline" {
+  description = "Analytics emitter mode: 'off' or 'firehose'. Off by default so the pipeline can never start billing by accident."
+  type        = string
+  default     = "off"
+
+  validation {
+    condition     = contains(["off", "firehose"], var.data_pipeline)
+    error_message = "data_pipeline must be either 'off' or 'firehose'."
+  }
+}
+
+variable "data_pipeline_stream_arn" {
+  description = "ARN of the Firehose delivery stream from the data stack. Empty attaches no Firehose permissions."
+  type        = string
+  default     = ""
+}
+
+variable "data_pipeline_stream_name" {
+  description = "Name of the Firehose delivery stream the application publishes to"
+  type        = string
+  default     = ""
+}

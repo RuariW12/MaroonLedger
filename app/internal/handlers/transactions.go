@@ -12,11 +12,16 @@ import (
 
 	"github.com/RuariW12/MaroonLedger/internal/ai"
 	"github.com/RuariW12/MaroonLedger/internal/models"
+	"github.com/RuariW12/MaroonLedger/internal/pipeline"
 )
 
 type TransactionHandler struct {
 	DB *sql.DB
 	AI ai.Provider
+	// Emitter publishes committed transactions to the analytics lake. Never
+	// nil in production wiring -- it is the no-op emitter when the pipeline is
+	// disabled -- but guarded anyway so a zero-value handler is safe in tests.
+	Emitter pipeline.Emitter
 }
 
 const transactionColumns = "id, account_id, amount, category, description, date, created_at, " +
@@ -167,7 +172,32 @@ func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Emitted only after the row is durably committed, so the lake can never
+	// contain a transaction the database does not. Emit does not block and
+	// cannot fail the request; when the pipeline is disabled this is a no-op.
+	if h.Emitter != nil {
+		h.Emitter.Emit(pipeline.Event{
+			ID:        t.ID,
+			Timestamp: t.Date,
+			Amount:    t.Amount,
+			Category:  t.Category,
+			// Description and account are deliberately omitted -- see the
+			// package comment on internal/pipeline.
+			AIProvider:      deref(t.AIProvider),
+			AnomalySeverity: deref(t.AnomalySeverity),
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// deref renders an optional string column as a plain value, since the event
+// schema uses omitempty rather than nulls.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // enrichment holds whatever the model managed to produce. Every field is

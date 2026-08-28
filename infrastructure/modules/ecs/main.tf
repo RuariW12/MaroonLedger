@@ -64,6 +64,11 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_PORT", value = tostring(var.db_port) },
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_SSLMODE", value = "require" },
+
+        # Analytics emitter. Off unless the data stack is deployed and wired
+        # in, matching AI_PROVIDER's default-to-inert posture.
+        { name = "DATA_PIPELINE", value = var.data_pipeline },
+        { name = "DATA_PIPELINE_STREAM", value = var.data_pipeline_stream_name },
       ]
 
       secrets = [
@@ -194,6 +199,40 @@ resource "aws_iam_role_policy" "ecs_task_bedrock" {
           "arn:aws:bedrock:${var.region}::foundation-model/anthropic.*",
           "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/*"
         ]
+      }
+    ]
+  })
+}
+
+# Firehose write access for the analytics emitter.
+#
+# On the task role, not the execution role -- the same split as the Bedrock
+# policy above. The application calls PutRecordBatch at runtime; the execution
+# role exists for the ECS agent before the container starts and has no reason
+# to reach the delivery stream.
+#
+# Created only when the pipeline is enabled, so a compute stack deployed
+# without the data stack carries no dangling permission to a stream that does
+# not exist.
+resource "aws_iam_role_policy" "ecs_task_firehose" {
+  count = var.data_pipeline_stream_arn != "" ? 1 : 0
+
+  name = "${var.project_name}-ecs-task-firehose"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "firehose:PutRecord",
+          "firehose:PutRecordBatch",
+        ]
+        # This one stream. Not firehose:* and not a wildcard ARN: the task
+        # writes transaction events and nothing else, so it should not be able
+        # to publish into any other stream in the account.
+        Resource = [var.data_pipeline_stream_arn]
       }
     ]
   })
