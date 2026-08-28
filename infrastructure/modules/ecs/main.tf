@@ -44,6 +44,20 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
+      # Non-sensitive configuration. Anything secret belongs in `secrets`
+      # below, which resolves at task start and never appears in the task
+      # definition, the console, or `describe-task-definition` output.
+      environment = [
+        { name = "AWS_REGION", value = var.region },
+        { name = "AI_PROVIDER", value = var.ai_provider },
+        { name = "BEDROCK_MODEL", value = var.bedrock_model },
+        { name = "AUTH_ISSUER", value = var.auth_issuer },
+        { name = "AUTH_JWKS_URL", value = var.auth_jwks_url },
+        # Not a secret: the client ID is public by design and ships in the
+        # frontend bundle. It is an audience check, not a credential.
+        { name = "AUTH_CLIENT_ID", value = var.auth_client_id },
+      ]
+
       secrets = [
         {
           name      = "DB_CREDENTIALS"
@@ -141,6 +155,37 @@ resource "aws_iam_role" "ecs_task" {
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }
+      }
+    ]
+  })
+}
+
+# Bedrock access belongs to the task role, not the execution role: the
+# application calls Bedrock at runtime, whereas the execution role exists for
+# the ECS agent to pull images and write logs before the container starts.
+# Keeping them separate means application code cannot borrow the agent's
+# permissions.
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  count = var.ai_provider == "bedrock" ? 1 : 0
+
+  name = "${var.project_name}-ecs-task-bedrock"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        # Scoped to Anthropic foundation models in this region rather than "*".
+        # The task has no reason to invoke any other model or provider.
+        Resource = [
+          "arn:aws:bedrock:${var.region}::foundation-model/anthropic.*",
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/*"
+        ]
       }
     ]
   })

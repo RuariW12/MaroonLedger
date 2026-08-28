@@ -39,3 +39,35 @@ variable "kms_key_arn" {
   description = "ARN of the KMS key for decrypting secrets"
   type        = string
 }
+
+variable "ai_provider" {
+  description = "Which AI backend the application uses: 'bedrock' or 'stub'. Bedrock IAM permissions are only attached when this is 'bedrock'."
+  type        = string
+  default     = "bedrock"
+
+  validation {
+    condition     = contains(["bedrock", "stub"], var.ai_provider)
+    error_message = "ai_provider must be either 'bedrock' or 'stub'."
+  }
+}
+
+variable "bedrock_model" {
+  description = "Bedrock model ID. Empty uses the application default."
+  type        = string
+  default     = ""
+}
+
+variable "auth_issuer" {
+  description = "Expected OIDC issuer (the token's iss claim)"
+  type        = string
+}
+
+variable "auth_jwks_url" {
+  description = "JWKS endpoint used to verify token signatures"
+  type        = string
+}
+
+variable "auth_client_id" {
+  description = "Cognito app client ID the token's client_id claim must match"
+  type        = string
+}

@@ -43,9 +43,9 @@ module "rds" {
 }
 
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${var.project_name}-db-credentials"
-  description = "RDS credentials for ${var.project_name}"
-  kms_key_id  = var.kms_key_arn
+  name                    = "${var.project_name}-db-credentials"
+  description             = "RDS credentials for ${var.project_name}"
+  kms_key_id              = var.kms_key_arn
   recovery_window_in_days = 0
 }
 

@@ -30,6 +30,15 @@ module "alb" {
   alb_security_group_id = module.security_groups.alb_security_group_id
 }
 
+module "cognito" {
+  source                  = "../../modules/cognito"
+  project_name            = var.project_name
+  hosted_ui_domain_prefix = var.hosted_ui_domain_prefix
+  callback_urls           = var.auth_callback_urls
+  logout_urls             = var.auth_logout_urls
+  advanced_security_mode  = var.cognito_advanced_security_mode
+}
+
 module "ecs" {
   source                    = "../../modules/ecs"
   project_name              = var.project_name
@@ -40,6 +49,16 @@ module "ecs" {
   target_group_arn          = module.alb.target_group_arn
   db_credentials_secret_arn = module.rds.db_credentials_secret_arn
   kms_key_arn               = module.kms.kms_key_arn
+
+  ai_provider   = var.ai_provider
+  bedrock_model = var.bedrock_model
+
+  # Taken from the Cognito module's outputs rather than hand-assembled, so the
+  # issuer the API validates against cannot drift from the pool that mints the
+  # tokens.
+  auth_issuer    = module.cognito.issuer
+  auth_jwks_url  = module.cognito.jwks_url
+  auth_client_id = module.cognito.client_id
 }
 
 module "cdn" {

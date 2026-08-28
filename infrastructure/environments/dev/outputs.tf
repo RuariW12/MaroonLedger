@@ -22,3 +22,23 @@ output "ecr_repository_url" {
   description = "ECR repository URL for pushing images"
   value       = module.ecr.repository_url
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito user pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_client_id" {
+  description = "Cognito app client ID for the frontend"
+  value       = module.cognito.client_id
+}
+
+output "cognito_hosted_ui_url" {
+  description = "Cognito hosted sign-in URL"
+  value       = module.cognito.hosted_ui_url
+}
+
+output "cognito_issuer" {
+  description = "OIDC issuer the API validates tokens against"
+  value       = module.cognito.issuer
+}

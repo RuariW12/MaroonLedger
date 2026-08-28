@@ -9,7 +9,7 @@ module "alb" {
   vpc_id  = var.vpc_id
   subnets = var.public_subnet_ids
 
-  security_groups = [var.alb_security_group_id]
+  security_groups       = [var.alb_security_group_id]
   create_security_group = false
 
   enable_deletion_protection = false
@@ -27,10 +27,10 @@ module "alb" {
 
   target_groups = {
     ecs = {
-      name             = "${var.project_name}-ecs-tg"
-      protocol         = "HTTP"
-      port             = 3000
-      target_type      = "ip"
+      name              = "${var.project_name}-ecs-tg"
+      protocol          = "HTTP"
+      port              = 3000
+      target_type       = "ip"
       create_attachment = false
 
       health_check = {
