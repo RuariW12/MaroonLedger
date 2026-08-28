@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useId } from 'react';
+import { useState, useMemo, useId } from 'react';
 
 // Charts are hand-built SVG rather than a charting library for one specific
 // reason: every colour here is a CSS custom property, so light/dark theming is
@@ -80,7 +80,6 @@ export function Sparkline({ values, width = 78, height = 26, stroke = 'var(--bra
  */
 export function BalanceArea({ series, height = 260 }) {
   const [hover, setHover] = useState(null);
-  const wrapRef = useRef(null);
   const gradientId = useId();
 
   const W = 900;
@@ -137,7 +136,7 @@ export function BalanceArea({ series, height = 260 }) {
   const point = hover ? series[hover.index] : null;
 
   return (
-    <div className="chart" ref={wrapRef}>
+    <div className="chart">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getTransactions, createTransaction } from './api';
 import { money } from './components/Charts';
 import { IconBack, IconPlus } from './components/Icons';
+import Stat from './components/Stat';
 
 function AccountDetail({ account, onBack }) {
   const [transactions, setTransactions] = useState([]);
@@ -67,7 +68,7 @@ function AccountDetail({ account, onBack }) {
         <Stat
           label="Transactions"
           value={String(transactions.length)}
-          footNote={account.type}
+          footNote={account.type.charAt(0).toUpperCase() + account.type.slice(1)}
         />
       </div>
 
@@ -211,18 +212,5 @@ function AccountDetail({ account, onBack }) {
   );
 }
 
-function Stat({ label, value, valueClass = '', footNote }) {
-  return (
-    <div className="stat">
-      <div className="stat-label">{label}</div>
-      <div className={`stat-value ${valueClass}`}>{value}</div>
-      {footNote && (
-        <div className="stat-foot">
-          <span style={{ textTransform: 'capitalize' }}>{footNote}</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default AccountDetail;

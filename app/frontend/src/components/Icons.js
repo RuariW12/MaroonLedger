@@ -19,12 +19,6 @@ export const IconDashboard = (p) => (
   </svg>
 );
 
-export const IconAccounts = (p) => (
-  <svg {...base} {...p}>
-    <rect x="2" y="5" width="20" height="14" rx="2.5" />
-    <path d="M2 10h20" />
-  </svg>
-);
 
 export const IconInsights = (p) => (
   <svg {...base} {...p}>

@@ -140,7 +140,19 @@ func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		date = parsed
 	}
 
+	// A caller-supplied category is validated rather than coerced. The model
+	// path maps an unknown value to "other" because it cannot be asked again;
+	// a person can be, and silently rewriting their input would hide the
+	// mistake. Rejecting also keeps the closed set genuinely closed, which the
+	// Athena partition projection depends on -- an unlisted category yields a
+	// partition the query engine never enumerates, so the row would be stored
+	// successfully and then be invisible to analytics.
 	category := strings.TrimSpace(strings.ToLower(input.Category))
+	if category != "" && !ai.IsCategory(category) {
+		http.Error(w, "Category must be one of: "+strings.Join(ai.CategoryNames(), ", "), http.StatusBadRequest)
+		return
+	}
+
 	enriched := h.enrich(r.Context(), accountID, accountType, input.Amount, input.Description, category)
 
 	needCategory := category == ""

@@ -53,6 +53,11 @@ var Categories = []Category{
 
 // ValidCategory maps a model-supplied string onto the allowlist. Unrecognised
 // values become CategoryOther rather than propagating into the database.
+//
+// This is the right behaviour for model output, which cannot be asked to try
+// again. It is the wrong behaviour for user input -- silently rewriting what
+// someone typed is worse than telling them it was invalid -- so callers
+// handling user input should use IsCategory and reject instead.
 func ValidCategory(s string) Category {
 	for _, c := range Categories {
 		if string(c) == s {
@@ -60,6 +65,31 @@ func ValidCategory(s string) Category {
 		}
 	}
 	return CategoryOther
+}
+
+// IsCategory reports whether s is exactly one of the allowed categories.
+//
+// The allowlist is not merely cosmetic: the Athena table projects partitions
+// from this same closed set, so a category outside it produces an S3 partition
+// the query engine never enumerates. A row stored with an unlisted category is
+// invisible to analytics, with nothing reporting that it went missing.
+func IsCategory(s string) bool {
+	for _, c := range Categories {
+		if string(c) == s {
+			return true
+		}
+	}
+	return false
+}
+
+// CategoryNames returns the allowlist as plain strings, for validation errors
+// and for generating the Athena projection list.
+func CategoryNames() []string {
+	names := make([]string, len(Categories))
+	for i, c := range Categories {
+		names[i] = string(c)
+	}
+	return names
 }
 
 // Severity grades how unusual a transaction is.

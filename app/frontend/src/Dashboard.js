@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getSummary, createAccount } from './api';
 import { BalanceArea, CategoryBars, Sparkline, money, accountTypeColor } from './components/Charts';
 import { IconPlus, IconAlert } from './components/Icons';
+import Stat from './components/Stat';
 
 const RANGES = [
   { days: 30, label: '30D' },
@@ -337,18 +338,6 @@ function Dashboard({ onSelectAccount }) {
   );
 }
 
-function Stat({ label, value, valueClass = '', foot, footNote }) {
-  return (
-    <div className="stat">
-      <div className="stat-label">{label}</div>
-      <div className={`stat-value ${valueClass}`}>{value}</div>
-      <div className="stat-foot">
-        {foot}
-        {footNote && <span>{footNote}</span>}
-      </div>
-    </div>
-  );
-}
 
 // Colour follows the account's own direction of travel, not its rank in the
 // list, so adding an account never repaints the others.
