@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/RuariW12/MaroonLedger/internal/ai"
@@ -137,10 +136,11 @@ func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	category := strings.TrimSpace(strings.ToLower(input.Category))
-	enriched := h.enrich(r.Context(), accountID, accountType, input.Amount, input.Description, category == "")
+	enriched := h.enrich(r.Context(), accountID, accountType, input.Amount, input.Description, category)
 
+	needCategory := category == ""
 	autoCategorized := false
-	if category == "" {
+	if needCategory {
 		if enriched.category != "" {
 			category = enriched.category
 			autoCategorized = true
@@ -179,10 +179,20 @@ type enrichment struct {
 	provider *string
 }
 
-// enrich runs categorisation and anomaly detection concurrently under a shared
-// deadline. Both are best-effort: any failure is logged and dropped, because
-// neither is worth failing a user's write over.
-func (h *TransactionHandler) enrich(ctx context.Context, accountID int, accountType string, amount float64, description string, needCategory bool) enrichment {
+// enrich resolves the category, then assesses the transaction against the
+// history of that same category.
+//
+// The two run in sequence rather than concurrently, and the ordering is the
+// point: anomaly detection compares like with like, so it needs the category
+// first. Comparing rent against the account-wide average -- which is what
+// running them in parallel forced -- flags every month's rent as unusual,
+// because rent is many times the size of a typical purchase. Against other
+// housing transactions it is unremarkable.
+//
+// When the caller supplied a category there is nothing to resolve and only the
+// assessment runs. Both steps are best-effort: any failure is logged and
+// dropped, because neither is worth failing a user's write over.
+func (h *TransactionHandler) enrich(ctx context.Context, accountID int, accountType string, amount float64, description, knownCategory string) enrichment {
 	var out enrichment
 	if h.AI == nil {
 		return out
@@ -195,51 +205,29 @@ func (h *TransactionHandler) enrich(ctx context.Context, accountID int, accountT
 		Description: description,
 		Amount:      amount,
 		AccountType: accountType,
+		Category:    knownCategory,
 	}
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
-	if needCategory {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			result, err := h.AI.Categorize(ctx, input)
-			if err != nil {
-				log.Printf("categorize (account %d): %v", accountID, err)
-				return
-			}
-			mu.Lock()
-			defer mu.Unlock()
+	if knownCategory == "" {
+		result, err := h.AI.Categorize(ctx, input)
+		if err != nil {
+			log.Printf("categorize (account %d): %v", accountID, err)
+		} else {
 			out.category = string(result.Category)
-		}()
+			input.Category = out.category
+		}
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		baseline, err := h.baselineFor(ctx, accountID)
-		if err != nil {
-			log.Printf("anomaly baseline (account %d): %v", accountID, err)
-			return
-		}
-		result, err := h.AI.DetectAnomaly(ctx, input, baseline)
-		if err != nil {
-			log.Printf("detect anomaly (account %d): %v", accountID, err)
-			return
-		}
-
+	if baseline, err := h.baselineFor(ctx, accountID); err != nil {
+		log.Printf("anomaly baseline (account %d): %v", accountID, err)
+	} else if result, err := h.AI.DetectAnomaly(ctx, input, baseline); err != nil {
+		log.Printf("detect anomaly (account %d): %v", accountID, err)
+	} else {
 		severity := string(result.Severity)
 		reason := result.Reason
-
-		mu.Lock()
-		defer mu.Unlock()
 		out.severity = &severity
 		out.reason = &reason
-	}()
-
-	wg.Wait()
+	}
 
 	if out.category != "" || out.severity != nil {
 		name := h.AI.Name()

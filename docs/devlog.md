@@ -199,3 +199,54 @@ compose, but the UI needed `npm install && npm start` on the host. Fixed that.
   static assets but **missing on `/`** - the HTML document, which is the one
   response where X-Frame-Options actually protects against clickjacking. Had to
   repeat them in each location that sets caching headers.
+
+## Day 13 - Redesign, light and dark modes
+
+Rebuilt the UI against Monarch-style references: sidebar rail, stat tiles, real
+charts, card layout, and a proper light/dark theme.
+
+- Built the design system as CSS custom properties with dark declared twice -
+  once under `prefers-color-scheme` for people who never touch the toggle, once
+  under `[data-theme]` so an explicit choice wins in both directions. The
+  `:not([data-theme="light"])` guard is what lets a light stamp beat OS-dark.
+- Kept the maroon identity but inverted where it lives: in light mode the rail
+  is deep maroon against a light page, which is the structure the references
+  use to separate navigation from work.
+- Wrote the charts as hand-built inline SVG instead of pulling in Recharts. The
+  deciding reason was theming: every colour is a CSS variable, so light/dark is
+  a token swap with no re-render and no JS reading computed styles. Also avoids
+  ~100KB of dependency for three chart types.
+- Ran the series palette through the data-viz validator against both surfaces
+  rather than eyeballing it. Passes the lightness band, chroma floor,
+  colour-blind separation, normal-vision separation, and contrast in both modes.
+- Category bars are one hue, not twelve. Identity lives in the row label -
+  twelve categories would need twelve hues nobody can tell apart, and would put
+  identity in the least accessible channel available. Past six, the tail folds
+  into "Other".
+- Added `/api/summary` so the dashboard is one request instead of one per
+  account, and so the balance arithmetic sits next to the data rather than in
+  the browser. Balance history is reconstructed by walking *backwards* from the
+  current balance - going forwards from zero plots cumulative movement, not
+  balance, and would disagree with the figure on the account.
+
+Four things went wrong, all caught by looking at real output rather than
+assuming:
+
+- **My own rate limiter blocked the seed script.** 85 of 99 writes came back
+  429. Working exactly as designed; the seeder just had to be paced under
+  60/min. Worth knowing the limit is real.
+- **Inflow and outflow were computed from per-category nets**, which is wrong
+  whenever a category holds movement in both directions. "transfer" held +1,800
+  of savings deposits and -6,400 of a wire, netting to -4,600 - erasing 1,800 of
+  real inflow and understating outflow by the same amount. The savings rate came
+  out negative when it should have been +38%. Fixed by splitting on the sign of
+  each row in SQL.
+- **Rent was flagged as anomalous every month.** The stub compared each amount
+  against the account-wide average, and rent is 8-15x a typical purchase.
+  Comparing within its own category makes it unremarkable. That required running
+  categorisation *before* anomaly detection instead of concurrently - the
+  ordering is the fix, and the concurrency was what forced the wrong comparison.
+- I misread colours off screenshots twice (thought the rail wasn't theming, then
+  thought a negative savings rate was rendering green). Both times measuring
+  `getComputedStyle` showed it was already correct. Lesson: read the computed
+  value, don't eyeball a PNG.

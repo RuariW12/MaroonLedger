@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getInsights } from './api';
+import { CategoryBars, money } from './components/Charts';
 
 function Insights() {
   const [data, setData] = useState(null);
@@ -18,7 +19,9 @@ function Insights() {
       setError(
         err.response?.status === 503
           ? 'Insight generation is temporarily unavailable.'
-          : 'Could not generate insights.'
+          : err.response?.status === 429
+            ? 'Rate limit reached. Try again in a minute.'
+            : 'Could not generate insights.'
       );
     } finally {
       setLoading(false);
@@ -26,44 +29,96 @@ function Insights() {
   };
 
   return (
-    <div className="insights-panel">
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Spending Insights</h2>
+    <div className="content">
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">Spending analysis</div>
+            <div className="card-sub">
+              {data
+                ? `${data.period_start} → ${data.period_end}`
+                : 'Aggregated category totals are sent for analysis — never individual transactions'}
+            </div>
+          </div>
+          <button className="btn btn-primary" onClick={run} disabled={loading}>
+            {loading ? 'Analysing…' : data ? 'Refresh analysis' : 'Analyse my spending'}
+          </button>
+        </div>
+
+        <div className="card-body">
+          {error && <div className="alert">{error}</div>}
+
+          {!data && !error && !loading && (
+            <div className="empty">
+              <div className="empty-title">No analysis yet</div>
+              <div className="empty-hint">
+                Run an analysis to get a summary of where your money goes.
+              </div>
+            </div>
+          )}
+
+          {loading && !data && <div className="chart-empty">Generating…</div>}
+
           {data && (
-            <p className="insights-meta">
-              {data.period_start} → {data.period_end} · analysed by {data.provider}
-            </p>
+            <>
+              <p className="insight-summary">{data.summary}</p>
+
+              {data.observations?.length > 0 && (
+                <div className="insight-group">
+                  <div className="insight-group-label">Observations</div>
+                  <div className="insight-list">
+                    {data.observations.map((o, i) => (
+                      <div className="insight-item" key={i}>
+                        <span className="insight-bullet">—</span>
+                        <span>{o}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {data.recommendations?.length > 0 && (
+                <div className="insight-group">
+                  <div className="insight-group-label">Recommendations</div>
+                  <div className="insight-list">
+                    {data.recommendations.map((r, i) => (
+                      <div className="insight-item" key={i}>
+                        <span className="insight-bullet">→</span>
+                        <span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div
+                className="insight-group"
+                style={{ display: 'flex', gap: 18, alignItems: 'center' }}
+              >
+                {/* Naming the provider keeps deterministic stub output from
+                    being mistaken for real model inference. */}
+                <span className="provider-tag">analysed by {data.provider}</span>
+                <span className="provider-tag">
+                  in {money(data.total_inflow, { compact: true })} · out{' '}
+                  {money(data.total_outflow, { compact: true })}
+                </span>
+              </div>
+            </>
           )}
         </div>
-        <button className="btn btn-primary" onClick={run} disabled={loading}>
-          {loading ? 'Analysing…' : data ? 'Refresh analysis' : 'Analyse my spending'}
-        </button>
       </div>
 
-      {error && <p className="login-error">{error}</p>}
-
-      {data && (
-        <div className="insights-body">
-          <p className="insights-summary">{data.summary}</p>
-
-          {data.observations?.length > 0 && (
-            <div className="insights-group">
-              <p className="insights-group-label">Observations</p>
-              <ul className="insights-list">
-                {data.observations.map((o, i) => <li key={i}>{o}</li>)}
-              </ul>
+      {data?.by_category?.length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">Category breakdown</div>
+              <div className="card-sub">The figures the analysis was based on</div>
             </div>
-          )}
-
-          {data.recommendations?.length > 0 && (
-            <div className="insights-group">
-              <p className="insights-group-label">Recommendations</p>
-              <ul className="insights-list">
-                {data.recommendations.map((r, i) => <li key={i}>{r}</li>)}
-              </ul>
-            </div>
-          )}
+          </div>
+          <div className="card-body">
+            <CategoryBars categories={data.by_category} limit={8} />
+          </div>
         </div>
       )}
     </div>

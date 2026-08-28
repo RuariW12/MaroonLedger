@@ -54,6 +54,7 @@ func main() {
 	accountHandler := &handlers.AccountHandler{DB: db}
 	transactionHandler := &handlers.TransactionHandler{DB: db, AI: provider}
 	insightsHandler := &handlers.InsightsHandler{DB: db, AI: provider}
+	summaryHandler := &handlers.SummaryHandler{DB: db}
 
 	// Model-backed routes cost money per call, so they get a tighter budget
 	// than the plain CRUD routes.
@@ -62,6 +63,7 @@ func main() {
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/me", handlers.Me)
+	api.HandleFunc("GET /api/summary", summaryHandler.Get)
 	api.HandleFunc("GET /api/accounts", accountHandler.List)
 	api.HandleFunc("GET /api/accounts/{id}", accountHandler.Get)
 	api.Handle("POST /api/accounts", writes.Middleware(http.HandlerFunc(accountHandler.Create)))

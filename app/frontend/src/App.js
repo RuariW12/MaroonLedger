@@ -5,11 +5,25 @@ import Insights from './Insights';
 import Login from './Login';
 import { getToken, signOut, authMode, completeCognitoSignIn } from './auth';
 import { getMe } from './api';
+import { useTheme } from './theme';
+import {
+  IconDashboard,
+  IconInsights,
+  IconSun,
+  IconMoon,
+  IconSignOut,
+} from './components/Icons';
 import './styles/App.css';
 
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard', Icon: IconDashboard },
+  { id: 'insights', label: 'Insights', Icon: IconInsights },
+];
+
 function App() {
-  const [selectedAccount, setSelectedAccount] = useState(null);
+  const { theme, toggle } = useTheme();
   const [view, setView] = useState('dashboard');
+  const [selectedAccount, setSelectedAccount] = useState(null);
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -23,8 +37,7 @@ function App() {
       const res = await getMe();
       setUser(res.data);
     } catch {
-      // The interceptor sends us back to sign-in on a 401; anything else
-      // just means we render as signed out.
+      // A 401 is handled by the interceptor, which returns us to sign-in.
       setUser(null);
     }
   }, []);
@@ -32,8 +45,8 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        // Handles the redirect back from the Cognito hosted UI. A no-op in
-        // dev mode and on any load without an authorization code.
+        // Handles the redirect back from the Cognito hosted UI. A no-op in dev
+        // mode and on any load without an authorization code.
         if (authMode === 'cognito') {
           await completeCognitoSignIn();
         }
@@ -46,88 +59,139 @@ function App() {
   }, [loadUser]);
 
   if (!ready) {
-    return <div className="login-shell"><p className="sidebar-subtitle">Loading…</p></div>;
+    return <div className="loading">Loading…</div>;
   }
 
   if (!user) {
     return (
       <>
-        {authError && <p className="login-error login-error-banner">{authError}</p>}
-        <Login onSignedIn={loadUser} />
+        {authError && (
+          <div className="auth" style={{ minHeight: 'auto', paddingBottom: 0 }}>
+            <div className="alert" style={{ maxWidth: 384, width: '100%' }}>
+              {authError}
+            </div>
+          </div>
+        )}
+        <Login onSignedIn={loadUser} theme={theme} onToggleTheme={toggle} />
       </>
     );
   }
 
-  const showDashboard = () => {
+  const goto = (id) => {
     setSelectedAccount(null);
+    setView(id);
+  };
+
+  const openAccount = (account) => {
+    setSelectedAccount(account);
     setView('dashboard');
   };
 
+  const initial = (user.username || 'u').charAt(0).toUpperCase();
+
   return (
-    <div className="app-layout">
-      <aside className="sidebar">
-        <h1 className="sidebar-logo">Maroon<span>Ledger</span></h1>
-        <p className="sidebar-subtitle">Personal Finance</p>
+    <div className="app">
+      <aside className="rail">
+        <div className="rail-brand">
+          <div className="rail-mark">M</div>
+          <div className="rail-name">MaroonLedger</div>
+        </div>
 
-        <nav className="sidebar-nav">
-          <p className="sidebar-section-label">Navigation</p>
+        <p className="rail-label">Menu</p>
+        {NAV.map(({ id, label, Icon }) => (
           <button
-            className={`sidebar-link ${view === 'dashboard' && !selectedAccount ? 'active' : ''}`}
-            onClick={showDashboard}
+            key={id}
+            className={`rail-link ${view === id && !selectedAccount ? 'active' : ''}`}
+            onClick={() => goto(id)}
+            aria-current={view === id && !selectedAccount ? 'page' : undefined}
           >
-            ◫ Dashboard
+            <Icon />
+            {label}
           </button>
-          <button
-            className={`sidebar-link ${view === 'insights' ? 'active' : ''}`}
-            onClick={() => { setSelectedAccount(null); setView('insights'); }}
-          >
-            ◈ Insights
-          </button>
-        </nav>
+        ))}
 
-        <div className="sidebar-divider" />
-
-        <p className="sidebar-section-label">Infrastructure</p>
-        <div className="sidebar-link sidebar-fact">
+        <p className="rail-label">Infrastructure</p>
+        <div className="rail-fact">
           <span>Region</span>
-          <span className="sidebar-fact-value">us-east-2</span>
+          <span className="rail-fact-value">us-east-2</span>
         </div>
-        <div className="sidebar-link sidebar-fact">
-          <span>Backend</span>
-          <span className="sidebar-fact-value">ECS Fargate</span>
+        <div className="rail-fact">
+          <span>Compute</span>
+          <span className="rail-fact-value">ECS Fargate</span>
         </div>
-        <div className="sidebar-link sidebar-fact">
+        <div className="rail-fact">
           <span>Database</span>
-          <span className="sidebar-fact-value">RDS Postgres</span>
+          <span className="rail-fact-value">RDS Postgres</span>
         </div>
-        <div className="sidebar-link sidebar-fact">
+        <div className="rail-fact">
           <span>Identity</span>
-          <span className="sidebar-fact-value">{authMode === 'cognito' ? 'Cognito' : 'Dev IdP'}</span>
+          <span className="rail-fact-value">
+            {authMode === 'cognito' ? 'Cognito' : 'Dev IdP'}
+          </span>
         </div>
 
-        <div className="sidebar-footer">
-          <div className="sidebar-status">
-            <div className="status-dot" />
-            <span>Signed in as {user.username || 'user'}</span>
+        <div className="rail-foot">
+          <div className="rail-user">
+            <div className="rail-avatar">{initial}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="rail-user-name">{user.username || 'Signed in'}</div>
+              <div className="rail-user-sub">Signed in</div>
+            </div>
+            <button
+              className="rail-link"
+              style={{ width: 'auto', padding: 6 }}
+              onClick={signOut}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <IconSignOut />
+            </button>
           </div>
-          <button className="sidebar-signout" onClick={signOut}>Sign out</button>
-          <p>v1.1.0 · Terraform + Go</p>
         </div>
       </aside>
 
-      {selectedAccount ? (
-        <AccountDetail account={selectedAccount} onBack={showDashboard} />
-      ) : view === 'insights' ? (
-        <div className="main-content">
-          <div className="page-header">
-            <h1 className="page-title">Insights</h1>
-            <p className="page-subtitle">Model-generated analysis of your spending</p>
+      <div className="main">
+        <header className="topbar">
+          <div>
+            <h1 className="topbar-title">
+              {selectedAccount
+                ? selectedAccount.name
+                : view === 'insights'
+                  ? 'Insights'
+                  : 'Dashboard'}
+            </h1>
+            <p className="topbar-sub">
+              {selectedAccount
+                ? 'Account activity and AI analysis'
+                : view === 'insights'
+                  ? 'Model-generated analysis of your spending'
+                  : 'Balance, activity and anomalies across your accounts'}
+            </p>
           </div>
+
+          <div className="topbar-actions">
+            <button
+              className="icon-btn"
+              onClick={toggle}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <IconSun /> : <IconMoon />}
+            </button>
+          </div>
+        </header>
+
+        {selectedAccount ? (
+          <AccountDetail
+            account={selectedAccount}
+            onBack={() => setSelectedAccount(null)}
+          />
+        ) : view === 'insights' ? (
           <Insights />
-        </div>
-      ) : (
-        <Dashboard onSelectAccount={(a) => { setSelectedAccount(a); setView('dashboard'); }} />
-      )}
+        ) : (
+          <Dashboard onSelectAccount={openAccount} />
+        )}
+      </div>
     </div>
   );
 }

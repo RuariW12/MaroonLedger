@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -41,6 +42,42 @@ var categoryKeywords = []struct {
 	{CategoryIncome, []string{"salary", "payroll", "wages", "deposit", "refund", "dividend", "interest paid"}},
 	{CategoryTransfer, []string{"transfer", "zelle", "venmo", "paypal", "wire", "internal"}},
 	{CategoryFees, []string{"fee", "charge", "overdraft", "interest charged", "penalty", "atm"}},
+}
+
+// usd formats an amount the way the summary text reads it aloud: a currency
+// symbol and thousands separators. Without it the generated prose says
+// "2118.75 of outflow", which reads like a quantity rather than money.
+func usd(v float64) string {
+	whole := int64(math.Abs(v))
+	frac := int64(math.Round((math.Abs(v) - float64(whole)) * 100))
+	if frac == 100 {
+		whole++
+		frac = 0
+	}
+
+	digits := strconv.FormatInt(whole, 10)
+	var grouped strings.Builder
+	for i, r := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			grouped.WriteByte(',')
+		}
+		grouped.WriteRune(r)
+	}
+
+	sign := ""
+	if v < 0 {
+		sign = "-"
+	}
+	return fmt.Sprintf("%s$%s.%02d", sign, grouped.String(), frac)
+}
+
+// comparisonLabel names whatever the amount was measured against, so the
+// reason text says what the comparison actually was.
+func comparisonLabel(category string) string {
+	if category == "" {
+		return "this account"
+	}
+	return category
 }
 
 // capitalize upper-cases the first letter for display. Categories are ASCII
@@ -93,14 +130,31 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 		}, nil
 	}
 
-	// Compare against the account's overall spending scale rather than a single
-	// category, since the incoming transaction is not yet categorised here.
+	// Compare like with like. Rent is many times the size of a typical
+	// purchase, so scoring it against the account-wide average flags every
+	// month's rent as unusual -- the comparison that matters is against other
+	// housing transactions, where it is entirely ordinary. Only when the
+	// category has no history does the account-wide scale become the fallback.
 	var totalCount int
 	var totalAmount, overallMax float64
-	for _, stat := range baseline {
-		totalCount += stat.Count
-		totalAmount += math.Abs(stat.TotalAmount)
-		overallMax = math.Max(overallMax, math.Abs(stat.MaxAmount))
+
+	if in.Category != "" {
+		for _, stat := range baseline {
+			if stat.Category == in.Category {
+				totalCount = stat.Count
+				totalAmount = math.Abs(stat.TotalAmount)
+				overallMax = math.Abs(stat.MaxAmount)
+				break
+			}
+		}
+	}
+
+	if totalCount == 0 {
+		for _, stat := range baseline {
+			totalCount += stat.Count
+			totalAmount += math.Abs(stat.TotalAmount)
+			overallMax = math.Max(overallMax, math.Abs(stat.MaxAmount))
+		}
 	}
 	if totalCount == 0 {
 		return &AnomalyAssessment{Severity: SeverityNone, Reason: "No history yet to compare against."}, nil
@@ -129,19 +183,19 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityHigh,
-			Reason:    fmt.Sprintf("Amount is %.1fx the account average and more than double the previous largest transaction.", amount/mean),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s and more than double the previous largest.", amount/mean, comparisonLabel(in.Category)),
 		}, nil
 	case amount > mean*3:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityMedium,
-			Reason:    fmt.Sprintf("Amount is %.1fx the account average.", amount/mean),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
 		}, nil
 	case amount > mean*2:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityLow,
-			Reason:    fmt.Sprintf("Amount is %.1fx the account average.", amount/mean),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
 		}, nil
 	default:
 		return &AnomalyAssessment{
@@ -176,8 +230,8 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 
 	if len(ranked) == 0 || spend == 0 {
 		return &Insights{
-			Summary: fmt.Sprintf("You recorded %.2f of income and no outgoing spending between %s and %s.",
-				summary.TotalInflow,
+			Summary: fmt.Sprintf("You recorded %s of income and no outgoing spending between %s and %s.",
+				usd(summary.TotalInflow),
 				summary.PeriodStart.Format("2 Jan 2006"), summary.PeriodEnd.Format("2 Jan 2006")),
 			Observations:    []string{"No outgoing transactions fall within this period."},
 			Recommendations: []string{"Add spending transactions to see where your money goes."},
@@ -196,13 +250,13 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 	}
 
 	observations := []string{
-		fmt.Sprintf("%s is your largest spending category at %.2f, which is %.0f%% of outgoings.", capitalize(top.Category), math.Abs(top.Total), topShare),
-		fmt.Sprintf("You spent %.2f across %d spending categories, %s (%.2f net).", spend, len(ranked), direction, net),
+		fmt.Sprintf("%s is your largest spending category at %s, which is %.0f%% of outgoings.", capitalize(top.Category), usd(math.Abs(top.Total)), topShare),
+		fmt.Sprintf("You spent %s across %d spending categories, %s (%s net).", usd(spend), len(ranked), direction, usd(net)),
 	}
 	if len(ranked) > 1 {
 		second := ranked[1]
 		observations = append(observations, fmt.Sprintf(
-			"%s follows at %.2f across %d transactions.", capitalize(second.Category), math.Abs(second.Total), second.Count))
+			"%s follows at %s across %d transactions.", capitalize(second.Category), usd(math.Abs(second.Total)), second.Count))
 	}
 
 	recommendations := []string{
@@ -218,9 +272,9 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 
 	return &Insights{
 		Summary: fmt.Sprintf(
-			"Between %s and %s you recorded %.2f of outflow against %.2f of inflow. Spending concentrated in %s, which accounted for %.0f%% of outgoings across %d categories.",
+			"Between %s and %s you recorded %s of outflow against %s of inflow. Spending concentrated in %s, which accounted for %.0f%% of outgoings across %d categories.",
 			summary.PeriodStart.Format("2 Jan 2006"), summary.PeriodEnd.Format("2 Jan 2006"),
-			summary.TotalOutflow, summary.TotalInflow, top.Category, topShare, len(ranked)),
+			usd(summary.TotalOutflow), usd(summary.TotalInflow), top.Category, topShare, len(ranked)),
 		Observations:    observations,
 		Recommendations: recommendations,
 	}, nil

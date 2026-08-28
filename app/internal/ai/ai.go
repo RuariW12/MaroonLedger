@@ -96,6 +96,10 @@ type TransactionInput struct {
 	Description string
 	Amount      float64
 	AccountType string
+	// Category is the resolved category, when one is known. Anomaly detection
+	// uses it to compare a transaction against its own kind rather than
+	// against the account as a whole.
+	Category string
 }
 
 // HistoricalStat is one category's aggregate behaviour for an account, used as
