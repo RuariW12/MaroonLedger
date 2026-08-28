@@ -88,12 +88,14 @@ function AccountDetail({ account, onBack }) {
                 <label className="form-label">Category</label>
                 <input
                   type="text"
-                  placeholder="e.g. Groceries"
+                  placeholder="Leave blank to categorise automatically"
                   value={form.category}
                   onChange={e => setForm({ ...form, category: e.target.value })}
                   className="form-input"
-                  required
                 />
+                <p className="field-hint">
+                  Left empty, the description is classified for you.
+                </p>
               </div>
             </div>
             <div className="form-grid">
@@ -133,8 +135,25 @@ function AccountDetail({ account, onBack }) {
           transactions.map(t => (
             <div key={t.id} className="transaction-item">
               <div>
-                <p className="transaction-category">{t.category}</p>
+                <p className="transaction-category">
+                  {t.category}
+                  {/* Marks a category the model chose rather than one the user
+                      stated, so a suggestion is never mistaken for a fact. */}
+                  {t.auto_categorized && (
+                    <span className="tag tag-auto" title={`Categorised by ${t.ai_provider || 'AI'}`}>
+                      auto
+                    </span>
+                  )}
+                  {t.anomaly_severity && t.anomaly_severity !== 'none' && (
+                    <span className={`tag tag-anomaly sev-${t.anomaly_severity}`} title={t.anomaly_reason}>
+                      {t.anomaly_severity} anomaly
+                    </span>
+                  )}
+                </p>
                 <p className="transaction-description">{t.description}</p>
+                {t.anomaly_reason && t.anomaly_severity !== 'none' && (
+                  <p className="transaction-anomaly-reason">{t.anomaly_reason}</p>
+                )}
                 <p className="transaction-date">{new Date(t.date).toLocaleDateString()}</p>
               </div>
               <p className={`transaction-amount ${t.amount < 0 ? 'amount-negative' : 'amount-positive'}`}>

@@ -30,8 +30,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const keyID = "maroonledger-dev-key"
-
 func main() {
 	issuer := getEnv("DEVIDP_ISSUER", "http://localhost:9000")
 	clientID := getEnv("DEVIDP_CLIENT_ID", "maroonledger-local")
@@ -43,6 +41,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("generate signing key: %v", err)
 	}
+
+	// Derive the key ID from the key itself, the way a real IdP does. A fixed
+	// kid would be a trap here: restarting generates a new key, and a consumer
+	// caching the JWKS has no way to notice the key behind an unchanged kid has
+	// changed, so every token it receives fails verification until its cache
+	// happens to expire. A kid that changes with the key makes the consumer
+	// refetch on first sight of an unknown one.
+	keyID := keyIDFor(&key.PublicKey)
 
 	mux := http.NewServeMux()
 
@@ -122,10 +128,35 @@ func main() {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           allowCORS(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+// allowCORS lets the frontend dev server call this provider from a different
+// origin (it runs on :3001, this on :9000). Cognito sets these headers on its
+// own token endpoint, so without them local sign-in fails in the browser even
+// though it works from curl.
+//
+// The wildcard is acceptable precisely because this process is local-only and
+// authenticates nobody. Never copy this onto the API.
+func allowCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Max-Age", "600")
+
+		// A JSON POST triggers a preflight, which must be answered before the
+		// real request is sent.
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // stableSubject maps a username to a deterministic UUID-shaped identifier, so
@@ -133,6 +164,13 @@ func main() {
 func stableSubject(username string) string {
 	sum := sha256.Sum256([]byte("maroonledger-dev:" + username))
 	return fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])
+}
+
+// keyIDFor produces a stable identifier for a public key, so the kid changes
+// exactly when the key does.
+func keyIDFor(pub *rsa.PublicKey) string {
+	sum := sha256.Sum256(pub.N.Bytes())
+	return base64.RawURLEncoding.EncodeToString(sum[:8])
 }
 
 func bigEndian(v uint64) []byte {
