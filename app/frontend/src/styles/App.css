@@ -8,8 +8,12 @@
    [data-theme="dark"] so an explicit choice beats the OS in both directions.
    The :not() guard is what lets a light stamp win against OS-dark.
 
+   The shell is neutral grey in both modes; maroon appears only where it means
+   something -- the mark, the active nav item, primary actions, and the data
+   itself. That is the difference between a brand colour and a background.
+
    The series ramp is not decorative. Both modes were checked with the
-   data-viz validator against their own surface (#ffffff / #191316): lightness
+   data-viz validator against their own surface (#ffffff / #15171a): lightness
    band, chroma floor, colour-blind separation, normal-vision separation and
    contrast all pass. Dark is the same hues re-stepped for the dark surface,
    not an automatic lightening of the light values.
@@ -18,24 +22,25 @@
 :root {
   color-scheme: light;
 
-  --page: #f4f5f7;
+  --page: #f5f6f8;
   --surface: #ffffff;
   --surface-2: #f7f8fa;
-  --surface-3: #eef0f3;
-  --border: #e4e7eb;
-  --border-strong: #d3d8de;
+  --surface-3: #eceef1;
+  --border: #e3e6ea;
+  --border-strong: #d2d6dc;
 
-  --text: #12151a;
-  --text-2: #5b636e;
-  --text-3: #8b94a0;
+  --text: #14161a;
+  --text-2: #596170;
+  --text-3: #8a919c;
 
-  /* A deep maroon rail against a light page -- the project's identity, and the
-     structure the reference dashboards use to separate navigation from work. */
-  --rail: #6d1526;
-  --rail-text: rgba(255, 255, 255, 0.74);
+  /* The shell is neutral in both modes. Maroon is reserved for the places that
+     carry meaning -- the mark, the active nav item, primary actions, and the
+     data itself -- so it reads as an accent rather than as the surface. */
+  --rail: #17191d;
+  --rail-text: rgba(255, 255, 255, 0.64);
   --rail-text-strong: #ffffff;
-  --rail-active: rgba(255, 255, 255, 0.14);
-  --rail-border: rgba(255, 255, 255, 0.10);
+  --rail-active: rgba(168, 24, 47, 0.32);
+  --rail-border: rgba(255, 255, 255, 0.08);
 
   --brand: #a8182f;
   --brand-hover: #8b1a2b;
@@ -58,8 +63,8 @@
   --critical: #c0392f;
   --critical-soft: rgba(208, 59, 59, 0.12);
 
-  --grid: #e9ecef;
-  --axis: #cdd3da;
+  --grid: #e8eaee;
+  --axis: #ccd1d8;
 
   --shadow-sm: 0 1px 2px rgba(16, 20, 26, 0.05);
   --shadow: 0 1px 3px rgba(16, 20, 26, 0.07), 0 6px 16px -6px rgba(16, 20, 26, 0.10);
@@ -74,22 +79,22 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --page: #0e0b0d;
-    --surface: #191316;
-    --surface-2: #211a1e;
-    --surface-3: #2a2126;
-    --border: #2c2328;
-    --border-strong: #3a2f35;
+    --page: #0b0c0e;
+    --surface: #15171a;
+    --surface-2: #1c1f23;
+    --surface-3: #24282d;
+    --border: #262a2f;
+    --border-strong: #343a41;
 
-    --text: #f6f1f2;
-    --text-2: #b0a4a9;
-    --text-3: #7d7076;
+    --text: #f0f2f5;
+    --text-2: #a3abb6;
+    --text-3: #737b86;
 
-    --rail: #130f11;
-    --rail-text: rgba(246, 241, 242, 0.62);
+    --rail: #0e1012;
+    --rail-text: rgba(240, 242, 245, 0.60);
     --rail-text-strong: #ffffff;
-    --rail-active: rgba(224, 86, 111, 0.16);
-    --rail-border: rgba(255, 255, 255, 0.07);
+    --rail-active: rgba(224, 86, 111, 0.22);
+    --rail-border: rgba(255, 255, 255, 0.06);
 
     --brand: #e0566f;
     --brand-hover: #ec6d84;
@@ -110,8 +115,8 @@
     --critical: #e8595a;
     --critical-soft: rgba(232, 89, 90, 0.14);
 
-    --grid: #262024;
-    --axis: #3a3035;
+    --grid: #23262b;
+    --axis: #363b42;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 22px -8px rgba(0, 0, 0, 0.6);
@@ -121,22 +126,22 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --page: #0e0b0d;
-  --surface: #191316;
-  --surface-2: #211a1e;
-  --surface-3: #2a2126;
-  --border: #2c2328;
-  --border-strong: #3a2f35;
+  --page: #0b0c0e;
+  --surface: #15171a;
+  --surface-2: #1c1f23;
+  --surface-3: #24282d;
+  --border: #262a2f;
+  --border-strong: #343a41;
 
-  --text: #f6f1f2;
-  --text-2: #b0a4a9;
-  --text-3: #7d7076;
+  --text: #f0f2f5;
+  --text-2: #a3abb6;
+  --text-3: #737b86;
 
-  --rail: #130f11;
-  --rail-text: rgba(246, 241, 242, 0.62);
+  --rail: #0e1012;
+  --rail-text: rgba(240, 242, 245, 0.60);
   --rail-text-strong: #ffffff;
-  --rail-active: rgba(224, 86, 111, 0.16);
-  --rail-border: rgba(255, 255, 255, 0.07);
+  --rail-active: rgba(224, 86, 111, 0.22);
+  --rail-border: rgba(255, 255, 255, 0.06);
 
   --brand: #e0566f;
   --brand-hover: #ec6d84;
@@ -157,8 +162,8 @@
   --critical: #e8595a;
   --critical-soft: rgba(232, 89, 90, 0.14);
 
-  --grid: #262024;
-  --axis: #3a3035;
+  --grid: #23262b;
+  --axis: #363b42;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 22px -8px rgba(0, 0, 0, 0.6);
