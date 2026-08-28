@@ -16,16 +16,22 @@ The full stack runs locally with no AWS account and no credentials. Authenticati
 
 ```bash
 cd app
-docker compose up --build          # Postgres, dev identity provider, API
+docker compose up --build          # Postgres, dev identity provider, API, frontend
 ```
+
+Open **http://localhost:3001** and sign in with any username. No Node, Go, or Postgres installation is needed — the four services are containerised, and edits to `frontend/src` hot-reload into the running container.
+
+The AI features run against a deterministic local provider, so every surface works offline and costs nothing.
+
+### Testing the production bundle
+
+The dev server is forgiving in ways a real web server is not. To exercise the actual production build — minified, served by nginx, with the same static-vs-`/api` split CloudFront performs in AWS:
 
 ```bash
-cd app/frontend
-npm install
-npm start                          # http://localhost:3001
+docker compose --profile prod up --build    # adds nginx on http://localhost:8080
 ```
 
-Sign in with any username. The AI features run against a deterministic local provider, so every surface works offline and costs nothing.
+This is what catches problems that exist only in the production bundle: a missing `REACT_APP_*` variable, or SPA routing that works under the dev server's catch-all but not under a real server.
 
 ### Using real Bedrock inference
 

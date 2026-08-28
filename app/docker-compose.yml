@@ -89,5 +89,53 @@ services:
       # Harmless when the directory is absent or unused.
       - ${HOME}/.aws:/home/nonroot/.aws:ro
 
+  # CRA dev server with hot reload. Edits to src/ on the host are picked up
+  # without a rebuild.
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    depends_on:
+      api:
+        condition: service_started
+      devidp:
+        condition: service_started
+    environment:
+      # Inside the compose network the API is `api`; "localhost" here would be
+      # the frontend container itself. Consumed by src/setupProxy.js.
+      API_PROXY_TARGET: http://api:3000
+
+      REACT_APP_AUTH_MODE: dev
+      # The browser runs on the host, so it must reach the dev identity
+      # provider as localhost -- even though the API reaches it as `devidp`.
+      # This is the same issuer/JWKS split the verifier is built around.
+      REACT_APP_DEV_IDP_URL: http://localhost:9000
+
+      # Docker Desktop's bind mounts do not deliver inotify events, so without
+      # polling the watcher never sees a host-side edit.
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # Only source is mounted. Mounting the whole directory would shadow the
+      # image's node_modules with the host's, which breaks on any OS or
+      # architecture mismatch.
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    ports:
+      - "3001:3001"
+
+  # The production bundle served by nginx, with the same static/-vs-/api split
+  # CloudFront performs. Started only with `--profile prod`, on a separate port
+  # so it can run alongside the dev server for comparison.
+  frontend-prod:
+    build:
+      context: ./frontend
+      target: production
+    profiles: ["prod"]
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8080:80"
+
 volumes:
   pgdata:

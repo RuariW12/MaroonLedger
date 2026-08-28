@@ -1,0 +1,13 @@
+node_modules
+build
+.dockerignore
+Dockerfile
+
+# Never copy local environment files into an image -- they are gitignored
+# precisely because they hold machine-specific and potentially sensitive values.
+.env
+.env.local
+.env.*.local
+
+npm-debug.log*
+.DS_Store

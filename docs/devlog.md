@@ -164,3 +164,38 @@ rather than delete the claims.
   than what the workload needs.
 - Added a "Deliberately Not Implemented" section to the infra doc. An
   architecture document that only lists what exists is half a document.
+
+## Day 12 - Containerising the frontend
+
+The frontend was still the odd one out: Postgres, the dev IdP and the API ran in
+compose, but the UI needed `npm install && npm start` on the host. Fixed that.
+
+- Two build targets rather than one. `dev` runs the CRA dev server with hot
+  reload; `production` serves the built bundle through nginx with the same
+  static-vs-/api split CloudFront performs. The production target is what
+  catches bundle-only problems - minification, a missing REACT_APP_* value, SPA
+  routing that the dev server's catch-all hides.
+- The `proxy` field in package.json only takes a literal string, which cannot
+  work in both environments: on the host the API is localhost:3000, inside
+  compose "localhost" is the frontend container itself. Replaced it with
+  `src/setupProxy.js` reading `API_PROXY_TARGET`.
+- Note the browser still talks to the dev IdP as `localhost:9000` while the API
+  reaches it as `devidp:9000` - the same issuer/JWKS split the verifier was
+  designed around on Day 8, showing up again for a different reason.
+- `npm ci` failed in the build: adding a dependency on the host produced a
+  lockfile my npm accepted but the container's npm 10 rejected (missing a
+  transitive `yaml` entry). Regenerated the lockfile *inside* node:22-alpine so
+  it matches what the image actually resolves. Worth remembering - a lockfile is
+  only reproducible against the npm that wrote it.
+- Needed `WATCHPACK_POLLING=true`; Docker Desktop bind mounts do not deliver
+  inotify events, so without it host edits never trigger a rebuild. Verified by
+  editing App.js and watching the served bundle change.
+- Only `src/` and `public/` are mounted, not the whole directory - mounting all
+  of it would shadow the image's node_modules with the host's, which breaks the
+  moment the architectures differ.
+- One real bug found while verifying. nginx does not merge `add_header` across
+  levels: a location block declaring any add_header of its own silently discards
+  every inherited one. So the server-level security headers were present on
+  static assets but **missing on `/`** - the HTML document, which is the one
+  response where X-Frame-Options actually protects against clickjacking. Had to
+  repeat them in each location that sets caching headers.
