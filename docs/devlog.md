@@ -59,3 +59,108 @@ MaroonLedger journal containing decision making, debugging, lessons learned, and
 - Built the frontend, synced to s3, invalidated CloudFront cache. Cloudfront serves the react app and routes api calls to the alb.
 - Seeded the database with semi-realistic data through API calls. Took screenshots
 - Destroyed infra, committed everything
+
+## Day 8 - Revisiting the project: authentication
+
+Picked this back up before recruiting season. First pass over the code turned up
+two gaps between what the docs claimed and what existed: the infrastructure doc
+described a Cognito identity layer and an ECS-on-EC2 cluster, and neither was
+real. The API was open CRUD with no auth at all.
+
+- Started with token verification rather than Cognito itself. Wrote the verifier
+  against an issuer + JWKS URL rather than against Cognito specifically, which
+  turned out to be the decision everything else hung off.
+- That let me build `cmd/devidp`, a tiny local identity provider. It means local
+  development runs the *same* verification code as production instead of a
+  disabled check. Deliberately did not add an `AUTH_DISABLED` flag - a bypass
+  that exists in the code is a bypass that can ship.
+- Learned/confirmed the JWT checks that actually matter beyond signature+expiry:
+  pinning the algorithm to RS256 (stops `alg=none` and HMAC key confusion),
+  requiring `token_use=access` (stops an ID token being replayed as an API
+  credential), and checking `client_id` (a valid signature only proves the pool
+  minted the token, not that it minted it for *us*).
+- Wrote tests for all of those as negative cases. 18 assertions, all passing.
+- Replaced the hardcoded single-migration read with a versioned runner - each
+  file applies once inside a transaction alongside its `schema_migrations`
+  insert, so a failed migration leaves no partial state.
+
+## Day 9 - Per-user data and the AI layer
+
+- Added `user_id` to accounts and scoped every query to it. Transactions
+  deliberately have no `user_id` of their own: ownership is established by
+  joining through the account, so there is exactly one place scoping can be got
+  wrong. Foreign accounts return 404 rather than 403 - a 403 confirms the ID is
+  real.
+- Built `internal/ai` around a `Provider` interface with two implementations:
+  Bedrock, and a deterministic stub. The stub is not a fallback, it is a
+  stand-in - it means the whole app works with no AWS account, and it made the
+  logic testable without mocking a network service. Recorded which provider
+  produced each result so stub output can never be mistaken for inference.
+- Thought about prompt injection properly for the first time. Transaction
+  descriptions are user-controlled text going into a prompt. The realisation
+  that mattered: the system prompt wording is not the control. The control is
+  that model output is re-validated against a closed allowlist in Go after it
+  comes back. The JSON schema constrains the model, but it is enforced on the
+  other side of a network call.
+- Verified with an actual injection attempt in a description. It landed as
+  category `other`, which is exactly the intended containment.
+- Enrichment runs categorisation and anomaly detection concurrently under a
+  15s deadline, and drops failures. Neither is worth failing a user's write.
+
+## Day 10 - Frontend auth, and two bugs only a browser could find
+
+- Wired PKCE for the Cognito hosted UI and a username form for the dev IdP
+  behind one interface. Checked the OAuth `state` parameter on return - without
+  it an attacker can feed you a code that logs you into *their* account.
+- Everything worked from curl. Then I opened it in a browser and sign-in failed
+  immediately: the dev IdP sent no CORS headers, so the cross-origin fetch from
+  the dev server was blocked. Cognito's token endpoint sets them, so this only
+  ever affected local development - and only in a real browser.
+- Fixed that, and hit a second one. The dev IdP generated a fresh RSA key on
+  every restart but advertised a *fixed* `kid`. The API had cached the old key
+  under that same `kid` and had no way to know it had changed, so every token
+  failed verification. Real IdPs derive the key ID from the key; changed it to a
+  hash of the modulus so rotation invalidates the cache the way it should.
+  Genuinely the most useful thing I learned this week.
+- Screenshotted the three views through headless Chrome to confirm no runtime
+  errors.
+
+## Day 11 - Closing the infrastructure/documentation gap
+
+Audited `docs/infrastructure.md` line by line against the Terraform. It was
+worse than the two gaps I already knew about - roughly a dozen claims described
+infrastructure that did not exist: VPC endpoints, NAT per AZ, Route 53, ACM, the
+HTTPS listener, the ALB prefix-list restriction, Secrets Manager rotation,
+CloudWatch alarms, SNS, and the GuardDuty event routing. Decided to build them
+rather than delete the claims.
+
+- **ALB was reachable from `0.0.0.0/0`.** The WAF sits on CloudFront, so anyone
+  resolving the ALB's DNS name skipped it entirely. Restricted the SG to
+  CloudFront's managed origin-facing prefix list. This was the most serious
+  finding of the whole pass.
+- **CloudFront was caching API responses for 24 hours.** The `/api/*` behaviour
+  set no TTLs, so the default applied. Stale balances, and responses still
+  served from the edge after sign-out. Pinned all three TTLs to 0.
+- Replaced the `random_password` + manual secret with an RDS-managed master
+  password. The old approach wrote the password into Terraform state in
+  plaintext, and rotating it would have needed a Lambda in the VPC. RDS rotates
+  natively. The managed secret only carries username/password, so the app now
+  merges whatever the secret provides with env vars for host/port/dbname.
+- Gated the whole DNS/TLS layer on `domain_name` being set, so the stack still
+  applies without a registered domain. Will point a real domain at it later.
+- Two Terraform lessons. First, module cycles: VPC endpoints need a security
+  group and security groups need the VPC, so the endpoints had to move to their
+  own module. Same problem again with DNS - CloudFront needs the ACM cert, so
+  the apex alias record had to move up into the environment.
+- Second, and more annoying: `cond ? {a=...} : {b=...}` fails with "Inconsistent
+  conditional result types" when the two objects have different attributes.
+  `cond ? {a=...} : {}` fails too. The pattern that works is a `for` over a
+  conditional *list* - `for k in (cond ? ["https"] : [])` - because that unifies
+  two lists of strings instead of two object types, then `merge()` the results.
+- Kept Fargate and wrote an honest justification instead of pretending it was
+  EC2+ASG. No host to patch, per-task billing, and per-task ENIs that make the
+  SG chain describe tasks rather than hosts. Choosing EC2 to look more
+  impressive would have been justifying infrastructure by what it teaches rather
+  than what the workload needs.
+- Added a "Deliberately Not Implemented" section to the infra doc. An
+  architecture document that only lists what exists is half a document.
