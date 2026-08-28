@@ -1,29 +1,57 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
-	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/RuariW12/MaroonLedger/internal/ai"
 	"github.com/RuariW12/MaroonLedger/internal/models"
 )
 
 type TransactionHandler struct {
 	DB *sql.DB
+	AI ai.Provider
 }
 
+const transactionColumns = "id, account_id, amount, category, description, date, created_at, " +
+	"auto_categorized, anomaly_severity, anomaly_reason, ai_provider"
+
+// enrichmentTimeout bounds how long a write waits on the model. Enrichment is
+// an enhancement, so exceeding it drops the analysis rather than the write.
+const enrichmentTimeout = 15 * time.Second
+
 func (h *TransactionHandler) ListByAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
 	accountID, err := strconv.Atoi(r.PathValue("accountId"))
 	if err != nil {
 		http.Error(w, "Invalid account ID", http.StatusBadRequest)
 		return
 	}
 
+	// Confirm ownership before returning anything. Without this, any
+	// authenticated user could read any account's transactions by id.
+	if _, err := accountOwnedBy(h.DB, accountID, userID); err == sql.ErrNoRows {
+		http.Error(w, "Account not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Failed to query account", http.StatusInternalServerError)
+		log.Printf("Error checking account ownership: %v", err)
+		return
+	}
+
 	rows, err := h.DB.Query(
-		"SELECT id, account_id, amount, category, description, date, created_at FROM transactions WHERE account_id = $1 ORDER BY date DESC",
+		"SELECT "+transactionColumns+" FROM transactions WHERE account_id = $1 ORDER BY date DESC, id DESC",
 		accountID,
 	)
 	if err != nil {
@@ -33,29 +61,45 @@ func (h *TransactionHandler) ListByAccount(w http.ResponseWriter, r *http.Reques
 	}
 	defer rows.Close()
 
-	var transactions []models.Transaction
+	transactions := []models.Transaction{}
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.AccountID, &t.Amount, &t.Category, &t.Description, &t.Date, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.AccountID, &t.Amount, &t.Category, &t.Description,
+			&t.Date, &t.CreatedAt, &t.AutoCategorized, &t.AnomalySeverity, &t.AnomalyReason, &t.AIProvider); err != nil {
 			http.Error(w, "Failed to scan transaction", http.StatusInternalServerError)
 			log.Printf("Error scanning transaction: %v", err)
 			return
 		}
 		transactions = append(transactions, t)
 	}
-
-	if transactions == nil {
-		transactions = []models.Transaction{}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Failed to read transactions", http.StatusInternalServerError)
+		log.Printf("Error iterating transactions: %v", err)
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(transactions)
+	writeJSON(w, http.StatusOK, transactions)
 }
 
 func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
 	accountID, err := strconv.Atoi(r.PathValue("accountId"))
 	if err != nil {
 		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	accountType, err := accountOwnedBy(h.DB, accountID, userID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Account not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Failed to query account", http.StatusInternalServerError)
+		log.Printf("Error checking account ownership: %v", err)
 		return
 	}
 
@@ -65,20 +109,26 @@ func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string  `json:"description"`
 		Date        string  `json:"date"`
 	}
-
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &input) {
 		return
 	}
 
-	if input.Category == "" {
-		http.Error(w, "Category is required", http.StatusBadRequest)
+	// NaN and ±Inf survive JSON decoding into float64 in some encoders and
+	// poison every downstream aggregate, so reject them at the boundary.
+	if math.IsNaN(input.Amount) || math.IsInf(input.Amount, 0) {
+		http.Error(w, "Amount must be a finite number", http.StatusBadRequest)
+		return
+	}
+
+	input.Description = strings.TrimSpace(input.Description)
+	if len(input.Description) > 255 {
+		http.Error(w, "Description must be 255 characters or fewer", http.StatusBadRequest)
 		return
 	}
 
 	date := time.Now()
 	if input.Date != "" {
-		parsed, err := time.Parse("2006-01-02", input.Date)
+		parsed, err := time.Parse(time.DateOnly, input.Date)
 		if err != nil {
 			http.Error(w, "Invalid date format, use YYYY-MM-DD", http.StatusBadRequest)
 			return
@@ -86,19 +136,142 @@ func (h *TransactionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		date = parsed
 	}
 
+	category := strings.TrimSpace(strings.ToLower(input.Category))
+	enriched := h.enrich(r.Context(), accountID, accountType, input.Amount, input.Description, category == "")
+
+	autoCategorized := false
+	if category == "" {
+		if enriched.category != "" {
+			category = enriched.category
+			autoCategorized = true
+		} else {
+			// Model unavailable and the user gave nothing: store a neutral
+			// value rather than failing a write that is otherwise valid.
+			category = string(ai.CategoryOther)
+		}
+	}
+
 	var t models.Transaction
 	err = h.DB.QueryRow(
-		"INSERT INTO transactions (account_id, amount, category, description, date) VALUES ($1, $2, $3, $4, $5) RETURNING id, account_id, amount, category, description, date, created_at",
-		accountID, input.Amount, input.Category, input.Description, date,
-	).Scan(&t.ID, &t.AccountID, &t.Amount, &t.Category, &t.Description, &t.Date, &t.CreatedAt)
-
+		`INSERT INTO transactions
+		   (account_id, amount, category, description, date, auto_categorized, anomaly_severity, anomaly_reason, ai_provider)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING `+transactionColumns,
+		accountID, input.Amount, category, input.Description, date,
+		autoCategorized, enriched.severity, enriched.reason, enriched.provider,
+	).Scan(&t.ID, &t.AccountID, &t.Amount, &t.Category, &t.Description, &t.Date, &t.CreatedAt,
+		&t.AutoCategorized, &t.AnomalySeverity, &t.AnomalyReason, &t.AIProvider)
 	if err != nil {
 		http.Error(w, "Failed to create transaction", http.StatusInternalServerError)
 		log.Printf("Error creating transaction: %v", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(t)
+	writeJSON(w, http.StatusCreated, t)
+}
+
+// enrichment holds whatever the model managed to produce. Every field is
+// optional; a zero value means analysis was skipped or failed.
+type enrichment struct {
+	category string
+	severity *string
+	reason   *string
+	provider *string
+}
+
+// enrich runs categorisation and anomaly detection concurrently under a shared
+// deadline. Both are best-effort: any failure is logged and dropped, because
+// neither is worth failing a user's write over.
+func (h *TransactionHandler) enrich(ctx context.Context, accountID int, accountType string, amount float64, description string, needCategory bool) enrichment {
+	var out enrichment
+	if h.AI == nil {
+		return out
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, enrichmentTimeout)
+	defer cancel()
+
+	input := ai.TransactionInput{
+		Description: description,
+		Amount:      amount,
+		AccountType: accountType,
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	if needCategory {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			result, err := h.AI.Categorize(ctx, input)
+			if err != nil {
+				log.Printf("categorize (account %d): %v", accountID, err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			out.category = string(result.Category)
+		}()
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		baseline, err := h.baselineFor(ctx, accountID)
+		if err != nil {
+			log.Printf("anomaly baseline (account %d): %v", accountID, err)
+			return
+		}
+		result, err := h.AI.DetectAnomaly(ctx, input, baseline)
+		if err != nil {
+			log.Printf("detect anomaly (account %d): %v", accountID, err)
+			return
+		}
+
+		severity := string(result.Severity)
+		reason := result.Reason
+
+		mu.Lock()
+		defer mu.Unlock()
+		out.severity = &severity
+		out.reason = &reason
+	}()
+
+	wg.Wait()
+
+	if out.category != "" || out.severity != nil {
+		name := h.AI.Name()
+		out.provider = &name
+	}
+	return out
+}
+
+// baselineFor summarises an account's history by category. Aggregates are used
+// rather than raw rows so descriptions are never re-sent to the model.
+func (h *TransactionHandler) baselineFor(ctx context.Context, accountID int) ([]ai.HistoricalStat, error) {
+	rows, err := h.DB.QueryContext(ctx, `
+		SELECT category,
+		       COUNT(*),
+		       COALESCE(SUM(ABS(amount)), 0),
+		       COALESCE(AVG(ABS(amount)), 0),
+		       COALESCE(MAX(ABS(amount)), 0)
+		FROM transactions
+		WHERE account_id = $1
+		GROUP BY category`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []ai.HistoricalStat
+	for rows.Next() {
+		var s ai.HistoricalStat
+		if err := rows.Scan(&s.Category, &s.Count, &s.TotalAmount, &s.MeanAmount, &s.MaxAmount); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	return stats, rows.Err()
 }

@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/RuariW12/MaroonLedger/internal/models"
 )
@@ -14,9 +14,22 @@ type AccountHandler struct {
 	DB *sql.DB
 }
 
+// accountTypes mirrors the CHECK constraint on the accounts table. Validating
+// here turns a database constraint violation into a useful 400.
+var accountTypes = map[string]bool{
+	"checking": true, "savings": true, "credit": true, "loan": true,
+}
+
+const accountColumns = "id, name, type, balance, created_at, updated_at"
+
 func (h *AccountHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
 	rows, err := h.DB.Query(
-		"SELECT id, name, type, balance, created_at, updated_at FROM accounts ORDER BY id",
+		"SELECT "+accountColumns+" FROM accounts WHERE user_id = $1 ORDER BY id", userID,
 	)
 	if err != nil {
 		http.Error(w, "Failed to query accounts", http.StatusInternalServerError)
@@ -25,7 +38,7 @@ func (h *AccountHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var accounts []models.Account
+	accounts := []models.Account{}
 	for rows.Next() {
 		var a models.Account
 		if err := rows.Scan(&a.ID, &a.Name, &a.Type, &a.Balance, &a.CreatedAt, &a.UpdatedAt); err != nil {
@@ -35,16 +48,21 @@ func (h *AccountHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		accounts = append(accounts, a)
 	}
-
-	if accounts == nil {
-		accounts = []models.Account{}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Failed to read accounts", http.StatusInternalServerError)
+		log.Printf("Error iterating accounts: %v", err)
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(accounts)
+	writeJSON(w, http.StatusOK, accounts)
 }
 
 func (h *AccountHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "Invalid account ID", http.StatusBadRequest)
@@ -53,9 +71,11 @@ func (h *AccountHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var a models.Account
 	err = h.DB.QueryRow(
-		"SELECT id, name, type, balance, created_at, updated_at FROM accounts WHERE id = $1", id,
+		"SELECT "+accountColumns+" FROM accounts WHERE id = $1 AND user_id = $2", id, userID,
 	).Scan(&a.ID, &a.Name, &a.Type, &a.Balance, &a.CreatedAt, &a.UpdatedAt)
 
+	// Someone else's account is reported as missing, not forbidden -- a 403
+	// would confirm the id is real.
 	if err == sql.ErrNoRows {
 		http.Error(w, "Account not found", http.StatusNotFound)
 		return
@@ -66,40 +86,47 @@ func (h *AccountHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(a)
+	writeJSON(w, http.StatusOK, a)
 }
 
 func (h *AccountHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Name string  `json:"name"`
-		Type string  `json:"type"`
-		Balance float64 `json:"balance"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	userID, ok := currentUser(w, r)
+	if !ok {
 		return
 	}
 
-	if input.Name == "" || input.Type == "" {
-		http.Error(w, "Name and type are required", http.StatusBadRequest)
+	var input struct {
+		Name    string  `json:"name"`
+		Type    string  `json:"type"`
+		Balance float64 `json:"balance"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+
+	input.Name = strings.TrimSpace(input.Name)
+	switch {
+	case input.Name == "":
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	case len(input.Name) > 255:
+		http.Error(w, "Name must be 255 characters or fewer", http.StatusBadRequest)
+		return
+	case !accountTypes[input.Type]:
+		http.Error(w, "Type must be one of: checking, savings, credit, loan", http.StatusBadRequest)
 		return
 	}
 
 	var a models.Account
 	err := h.DB.QueryRow(
-		"INSERT INTO accounts (name, type, balance) VALUES ($1, $2, $3) RETURNING id, name, type, balance, created_at, updated_at",
-		input.Name, input.Type, input.Balance,
+		"INSERT INTO accounts (name, type, balance, user_id) VALUES ($1, $2, $3, $4) RETURNING "+accountColumns,
+		input.Name, input.Type, input.Balance, userID,
 	).Scan(&a.ID, &a.Name, &a.Type, &a.Balance, &a.CreatedAt, &a.UpdatedAt)
-
 	if err != nil {
 		http.Error(w, "Failed to create account", http.StatusInternalServerError)
 		log.Printf("Error creating account: %v", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(a)
+	writeJSON(w, http.StatusCreated, a)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -11,13 +12,195 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RuariW12/MaroonLedger/internal/ai"
+	"github.com/RuariW12/MaroonLedger/internal/auth"
 	"github.com/RuariW12/MaroonLedger/internal/database"
 	"github.com/RuariW12/MaroonLedger/internal/handlers"
+	"github.com/RuariW12/MaroonLedger/internal/ratelimit"
 )
 
 func main() {
-	var host, port, user, password, dbname, sslmode string
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
+	db, err := connectDatabase()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	if err := database.Migrate(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	// Auth configuration is required, and there is no flag to turn it off.
+	// A misconfigured issuer stops the process here rather than starting a
+	// server that quietly serves unauthenticated traffic.
+	verifier, err := auth.NewVerifier(ctx, auth.Config{
+		Issuer:   mustEnv("AUTH_ISSUER"),
+		JWKSURL:  mustEnv("AUTH_JWKS_URL"),
+		ClientID: mustEnv("AUTH_CLIENT_ID"),
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialise authentication: %v", err)
+	}
+
+	provider, err := buildAIProvider(ctx)
+	if err != nil {
+		log.Fatalf("Failed to initialise AI provider: %v", err)
+	}
+	log.Printf("AI provider: %s", provider.Name())
+
+	accountHandler := &handlers.AccountHandler{DB: db}
+	transactionHandler := &handlers.TransactionHandler{DB: db, AI: provider}
+	insightsHandler := &handlers.InsightsHandler{DB: db, AI: provider}
+
+	// Model-backed routes cost money per call, so they get a tighter budget
+	// than the plain CRUD routes.
+	inference := ratelimit.New(10, 3)
+	writes := ratelimit.New(60, 15)
+
+	api := http.NewServeMux()
+	api.HandleFunc("GET /api/me", handlers.Me)
+	api.HandleFunc("GET /api/accounts", accountHandler.List)
+	api.HandleFunc("GET /api/accounts/{id}", accountHandler.Get)
+	api.Handle("POST /api/accounts", writes.Middleware(http.HandlerFunc(accountHandler.Create)))
+	api.HandleFunc("GET /api/accounts/{accountId}/transactions", transactionHandler.ListByAccount)
+	api.Handle("POST /api/accounts/{accountId}/transactions", writes.Middleware(http.HandlerFunc(transactionHandler.Create)))
+	api.Handle("GET /api/insights", inference.Middleware(http.HandlerFunc(insightsHandler.Generate)))
+
+	mux := http.NewServeMux()
+
+	// Health is deliberately unauthenticated: the ALB target group calls it
+	// with no credentials. It reports liveness only -- never configuration,
+	// versions, or anything else useful to someone probing the service.
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		if err := db.PingContext(r.Context()); err != nil {
+			http.Error(w, `{"status":"unhealthy"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	mux.Handle("/api/", verifier.Middleware(api))
+
+	port := getEnv("PORT", "3000")
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           requestLogger(securityHeaders(mux)),
+		ReadTimeout:       10 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		// Generous enough to cover a synchronous inference call on the
+		// insights endpoint, which can legitimately take tens of seconds.
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	go func() {
+		log.Printf("Server starting on port %s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
+}
+
+// buildAIProvider selects the model backend.
+//
+// The default is the local stub, so a missing or misconfigured AI_PROVIDER can
+// never result in unexpected inference spend -- opting into Bedrock is explicit.
+func buildAIProvider(ctx context.Context) (ai.Provider, error) {
+	switch provider := getEnv("AI_PROVIDER", "stub"); provider {
+	case "stub":
+		return ai.NewStub(), nil
+	case "bedrock":
+		return ai.NewBedrock(ctx, ai.BedrockConfig{
+			Region: getEnv("AWS_REGION", "us-east-2"),
+			Model:  os.Getenv("BEDROCK_MODEL"),
+		})
+	default:
+		return nil, &configError{"AI_PROVIDER must be 'stub' or 'bedrock', got " + provider}
+	}
+}
+
+// securityHeaders applies defence-in-depth response headers.
+//
+// CloudFront terminates TLS and serves the frontend, so the headers that matter
+// for the HTML document belong there. These cover the API's own responses.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		// Financial data should not sit in a shared or disk cache.
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// statusRecorder captures the response status for logging.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+// requestLogger emits one line per request.
+//
+// It logs the method, path, status and duration -- never headers, bodies, or
+// query strings, any of which can carry tokens or personal data into what is a
+// far less protected system than the database.
+func requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+		next.ServeHTTP(rec, r)
+
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start).Round(time.Millisecond))
+	})
+}
+
+type configError struct{ msg string }
+
+func (e *configError) Error() string { return e.msg }
+
+func mustEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("Required environment variable %s is not set", key)
+	}
+	return value
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+// connectDatabase resolves credentials from Secrets Manager when running on
+// ECS (where the secret is injected as a JSON blob) and from discrete
+// environment variables locally.
+func connectDatabase() (*sql.DB, error) {
 	if creds := os.Getenv("DB_CREDENTIALS"); creds != "" {
 		var parsed struct {
 			Host     string `json:"host"`
@@ -27,84 +210,20 @@ func main() {
 			DBName   string `json:"dbname"`
 		}
 		if err := json.Unmarshal([]byte(creds), &parsed); err != nil {
-			log.Fatalf("Failed to parse DB_CREDENTIALS: %v", err)
+			// Deliberately does not echo the value -- it is the database
+			// password, and a parse error would otherwise put it in the logs.
+			return nil, &configError{"DB_CREDENTIALS is not valid JSON"}
 		}
-		host = parsed.Host
-		port = strconv.Itoa(parsed.Port)
-		user = parsed.Username
-		password = parsed.Password
-		dbname = parsed.DBName
-		sslmode = "require"
-	} else {
-		host = getEnv("DB_HOST", "localhost")
-		port = getEnv("DB_PORT", "5432")
-		user = getEnv("DB_USER", "postgres")
-		password = getEnv("DB_PASSWORD", "postgres")
-		dbname = getEnv("DB_NAME", "maroonledger")
-		sslmode = "disable"
+		return database.Connect(parsed.Host, strconv.Itoa(parsed.Port), parsed.Username,
+			parsed.Password, parsed.DBName, "require")
 	}
 
-	db, err := database.Connect(host, port, user, password, dbname, sslmode)
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
-
-	if err := database.Migrate(db); err != nil {
-			log.Fatalf("Failed to run migrations: %v", err)
-		}
-
-	accountHandler := &handlers.AccountHandler{DB: db}
-	transactionHandler := &handlers.TransactionHandler{DB: db}
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	mux.HandleFunc("GET /api/accounts", accountHandler.List)
-	mux.HandleFunc("GET /api/accounts/{id}", accountHandler.Get)
-	mux.HandleFunc("POST /api/accounts", accountHandler.Create)
-
-	mux.HandleFunc("GET /api/accounts/{accountId}/transactions", transactionHandler.ListByAccount)
-	mux.HandleFunc("POST /api/accounts/{accountId}/transactions", transactionHandler.Create)
-
-	server := &http.Server{
-		Addr:         ":3000",
-		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-
-	go func() {
-		log.Printf("Server starting on port 3000")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	log.Println("Server exited")
-}
-
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
+	return database.Connect(
+		getEnv("DB_HOST", "localhost"),
+		getEnv("DB_PORT", "5432"),
+		getEnv("DB_USER", "postgres"),
+		getEnv("DB_PASSWORD", "postgres"),
+		getEnv("DB_NAME", "maroonledger"),
+		getEnv("DB_SSLMODE", "disable"),
+	)
 }
