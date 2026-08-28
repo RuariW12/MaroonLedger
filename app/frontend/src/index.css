@@ -1,3 +1,43 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Base element defaults.
+ *
+ * This file previously pulled in the whole of Tailwind (@tailwind base /
+ * components / utilities). Nothing in the app ever used a Tailwind utility --
+ * every class here is semantic and defined in styles/App.css -- so all it
+ * contributed was a second CSS reset layered on top of ours, a scan of every
+ * source file on each rebuild, and two build dependencies.
+ *
+ * The handful of Preflight rules actually worth keeping are written out below.
+ * The reset proper (margin, padding, box-sizing) lives in styles/App.css.
+ */
+
+/* Replaced elements are inline by default, which leaves a few pixels of
+   line-box descender space under every image and icon. */
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+/* Headings inherit rather than carrying browser defaults, so a heading's size
+   comes from the class that styles it and never from its level. Level stays a
+   document-structure decision. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Form controls do not inherit typography on their own. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
