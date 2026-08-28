@@ -279,3 +279,19 @@ assuming:
   `prefers-color-scheme` block but not `[data-theme]`, which would have left the
   toggle serving the old pink palette while OS-dark served the new one. Caught
   by grepping both blocks rather than trusting the replace count.
+
+## Day 15 - Dropped the webfont
+
+IBM Plex reads as the default "AI product" typeface now, so it went. Replaced
+with the native system stack rather than another downloaded face:
+SF Pro on macOS, Segoe UI Variable on Windows, Roboto on Android, with
+ui-monospace (SF Mono / Consolas) for the money columns.
+
+The argument for it is not only that it looks less trend-following. It removes
+the last third-party origin from the frontend: one fewer request on first
+paint, no flash of unstyled text, nothing to break when a font CDN is
+unreachable, and no `fonts.googleapis.com` to allow in a CSP. Verified with the
+network log - zero font requests, zero `@font-face` faces registered.
+
+Also normalised font-weight 550/650 to 500/600. Those are variable-font weights;
+static system fallbacks round them unpredictably.
