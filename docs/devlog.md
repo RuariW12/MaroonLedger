@@ -250,3 +250,32 @@ assuming:
   thought a negative savings rate was rendering green). Both times measuring
   `getComputedStyle` showed it was already correct. Lesson: read the computed
   value, don't eyeball a PNG.
+
+## Day 14 - Palette and typeface pass
+
+- Darkened the brand maroon. Dark mode was `#e0566f`, which read as pink
+  against a neutral shell. Walked it down and measured each step: `#b8354c` is
+  the floor that still clears 3:1 on the dark surface, so `#c23a51` keeps
+  margin. Light went to `#98192e` - `#8f1528` was fractionally under the
+  validator's lightness band (0.422 vs the 0.43 floor).
+- Swapped Inter/JetBrains for IBM Plex Sans/Mono. Plex reads more engineered
+  than Inter's SaaS-default look, and Plex Mono's tabular figures are good in
+  the money columns.
+- Went from six hues to eight and used them on the category bars, which had
+  been single-hue. Ordering matters more than the hues: orange next to green
+  fails colour-blind separation (ΔE 2.7) and magenta next to orange fails the
+  normal-vision floor (11.6). Tested orderings until one cleared every adjacent
+  gate in both modes - maroon, blue, orange, aqua, amber, magenta, violet,
+  green.
+- Colour is keyed to the category name, never its rank in the sorted list, so
+  filtering or a change in ranking never repaints the other bars. Eight
+  categories get a hue; the rest and the "Other" rollup are neutral grey. A
+  ninth hue would have to be a repeat, and a repeat is worse than an honest
+  grey.
+- Added the gradient fade from the reference via `color-mix`, and gave the area
+  fill a third gradient stop - two stops leave a visible hard edge on dark,
+  where fill and card are close in luminance.
+- Same trap as Day 13, again: my scripted edit updated the
+  `prefers-color-scheme` block but not `[data-theme]`, which would have left the
+  toggle serving the old pink palette while OS-dark served the new one. Caught
+  by grepping both blocks rather than trusting the replace count.

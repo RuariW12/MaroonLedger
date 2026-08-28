@@ -148,8 +148,12 @@ export function BalanceArea({ series, height = 260 }) {
         aria-label="Account balance over time"
       >
         <defs>
+          {/* Three stops rather than two: a linear ramp to zero leaves a
+              visible hard edge partway down on dark surfaces, where the fill
+              and the card background are close in luminance. */}
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--series-1)" stopOpacity="0.26" />
+            <stop offset="0%" stopColor="var(--series-1)" stopOpacity="0.34" />
+            <stop offset="55%" stopColor="var(--series-1)" stopOpacity="0.12" />
             <stop offset="100%" stopColor="var(--series-1)" stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -232,13 +236,49 @@ export function BalanceArea({ series, height = 260 }) {
   );
 }
 
+// Fixed category-to-slot assignment.
+//
+// Colour follows the category, never its position in the sorted list -- so
+// filtering or a change in ranking never repaints the survivors. Eight
+// categories get a validated hue; everything else, including the "Other"
+// rollup, is deliberately neutral so a minor category can never impersonate a
+// named one. This is why the list is a map rather than an index into an array.
+const CATEGORY_COLORS = {
+  housing: 'var(--series-1)',
+  transport: 'var(--series-2)',
+  dining: 'var(--series-3)',
+  groceries: 'var(--series-4)',
+  utilities: 'var(--series-5)',
+  transfer: 'var(--series-6)',
+  entertainment: 'var(--series-7)',
+  healthcare: 'var(--series-8)',
+};
+
+// Account type is a small closed set, so each gets its own validated hue.
+// Keyed on the type rather than the row's position, for the same reason
+// categories are: adding an account must not repaint the others.
+const ACCOUNT_TYPE_COLORS = {
+  checking: 'var(--series-2)',
+  savings: 'var(--series-8)',
+  credit: 'var(--series-1)',
+  loan: 'var(--series-7)',
+};
+
+export function accountTypeColor(type) {
+  return ACCOUNT_TYPE_COLORS[String(type).toLowerCase()] || 'var(--series-muted)';
+}
+
+export function categoryColor(category) {
+  return CATEGORY_COLORS[String(category).toLowerCase()] || 'var(--series-muted)';
+}
+
 /**
  * CategoryBars — ranked magnitude.
  *
- * One hue, not twelve. The reader identifies a category from its row label; a
- * distinct colour per category would need a dozen hues that no one could tell
- * apart, and would encode identity in the least accessible channel available.
- * Ranked bars also read magnitude far more accurately than a pie.
+ * Ranked bars read magnitude far more accurately than a pie. Identity is
+ * carried by the row label first and the hue second: the label is what makes
+ * the chart legible without colour at all, which is also what satisfies the
+ * relief rule for the two light-mode hues that sit below 3:1 on white.
  */
 export function CategoryBars({ categories, limit = 6 }) {
   const rows = useMemo(() => {
@@ -286,7 +326,10 @@ export function CategoryBars({ categories, limit = 6 }) {
               className="bar-fill"
               style={{
                 width: `${Math.max((row.magnitude / max) * 100, 1.5)}%`,
-                background: 'var(--series-1)',
+                // Fades toward the surface along its length, which keeps the
+                // bar's leading edge -- the end the eye measures against -- the
+                // most saturated part of the mark.
+                background: `linear-gradient(90deg, ${categoryColor(row.category)} 0%, color-mix(in srgb, ${categoryColor(row.category)} 42%, transparent) 100%)`,
               }}
               title={`${row.category}: ${money(row.magnitude)}`}
             />

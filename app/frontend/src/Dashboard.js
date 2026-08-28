@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getSummary, createAccount } from './api';
-import { BalanceArea, CategoryBars, Sparkline, money } from './components/Charts';
+import { BalanceArea, CategoryBars, Sparkline, money, accountTypeColor } from './components/Charts';
 import { IconPlus, IconAlert } from './components/Icons';
 
 const RANGES = [
@@ -236,11 +236,27 @@ function Dashboard({ onSelectAccount }) {
                 className="row row-clickable"
                 onClick={() => onSelectAccount(a)}
               >
-                <div className="row-icon">{a.name.charAt(0).toUpperCase()}</div>
+                <div
+                  className="row-icon"
+                  style={{
+                    background: `color-mix(in srgb, ${accountTypeColor(a.type)} 16%, transparent)`,
+                    color: accountTypeColor(a.type),
+                  }}
+                >
+                  {a.name.charAt(0).toUpperCase()}
+                </div>
                 <div className="row-main">
                   <div className="row-title">{a.name}</div>
                   <div className="row-meta">
-                    <span className="chip">{a.type}</span>
+                    <span
+                      className="chip"
+                      style={{
+                        background: `color-mix(in srgb, ${accountTypeColor(a.type)} 14%, transparent)`,
+                        color: accountTypeColor(a.type),
+                      }}
+                    >
+                      {a.type}
+                    </span>
                     <span>
                       Opened {new Date(a.created_at).toLocaleDateString()}
                     </span>

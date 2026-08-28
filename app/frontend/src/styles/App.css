@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TOKENS
@@ -39,22 +39,31 @@
   --rail: #17191d;
   --rail-text: rgba(255, 255, 255, 0.64);
   --rail-text-strong: #ffffff;
-  --rail-active: rgba(168, 24, 47, 0.32);
+  --rail-active: rgba(152, 25, 46, 0.38);
   --rail-border: rgba(255, 255, 255, 0.08);
 
-  --brand: #a8182f;
-  --brand-hover: #8b1a2b;
-  --brand-soft: rgba(168, 24, 47, 0.09);
+  --brand: #98192e;
+  --brand-hover: #7d1526;
+  --brand-soft: rgba(152, 25, 46, 0.09);
 
-  --series-1: #a8182f;
+  /* Fixed hue order. The ordering is the colour-blind-safety mechanism, not a
+     preference: candidate orders were run through the validator and only ones
+     clearing every adjacent gate in BOTH modes kept. Orange next to green, and
+     magenta next to orange, both fail -- hence this sequence. */
+  --series-1: #98192e;
   --series-2: #2a78d6;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #4a3aa7;
-  --series-6: #008300;
+  --series-3: #eb6834;
+  --series-4: #1baf7a;
+  --series-5: #eda100;
+  --series-6: #c9457a;
+  --series-7: #4a3aa7;
+  --series-8: #008300;
+  /* Categories outside the named eight, and the "Other" rollup. Deliberately
+     neutral so it never impersonates a real category. */
+  --series-muted: #9aa2ad;
 
   --pos: #087a3f;
-  --neg: #b3253c;
+  --neg: #a8253c;
 
   /* Status steps are reserved -- never reused as a series colour, and always
      shipped with a label rather than carrying meaning through hue alone. */
@@ -93,22 +102,25 @@
     --rail: #0e1012;
     --rail-text: rgba(240, 242, 245, 0.60);
     --rail-text-strong: #ffffff;
-    --rail-active: rgba(224, 86, 111, 0.22);
+    --rail-active: rgba(194, 58, 81, 0.30);
     --rail-border: rgba(255, 255, 255, 0.06);
 
-    --brand: #e0566f;
-    --brand-hover: #ec6d84;
-    --brand-soft: rgba(224, 86, 111, 0.14);
+    --brand: #c23a51;
+    --brand-hover: #d24a61;
+    --brand-soft: rgba(194, 58, 81, 0.18);
 
-    --series-1: #e0566f;
+    --series-1: #c23a51;
     --series-2: #3987e5;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #9085e9;
-    --series-6: #008300;
+    --series-3: #d95926;
+    --series-4: #199e70;
+    --series-5: #c98500;
+    --series-6: #d55181;
+    --series-7: #9085e9;
+    --series-8: #008300;
+    --series-muted: #6b737e;
 
     --pos: #35c46f;
-    --neg: #e0566f;
+    --neg: #d4526a;
 
     --warning: #fab219;
     --warning-soft: rgba(250, 178, 25, 0.14);
@@ -140,22 +152,25 @@
   --rail: #0e1012;
   --rail-text: rgba(240, 242, 245, 0.60);
   --rail-text-strong: #ffffff;
-  --rail-active: rgba(224, 86, 111, 0.22);
+  --rail-active: rgba(194, 58, 81, 0.30);
   --rail-border: rgba(255, 255, 255, 0.06);
 
-  --brand: #e0566f;
-  --brand-hover: #ec6d84;
-  --brand-soft: rgba(224, 86, 111, 0.14);
+  --brand: #c23a51;
+  --brand-hover: #d24a61;
+  --brand-soft: rgba(194, 58, 81, 0.18);
 
-  --series-1: #e0566f;
+  --series-1: #c23a51;
   --series-2: #3987e5;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --series-5: #9085e9;
-  --series-6: #008300;
+  --series-3: #d95926;
+  --series-4: #199e70;
+  --series-5: #c98500;
+  --series-6: #d55181;
+  --series-7: #9085e9;
+  --series-8: #008300;
+  --series-muted: #6b737e;
 
   --pos: #35c46f;
-  --neg: #e0566f;
+  --neg: #d4526a;
 
   --warning: #fab219;
   --warning-soft: rgba(250, 178, 25, 0.14);
@@ -180,7 +195,7 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--page);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -192,7 +207,7 @@ body {
    correct for prose; tabular is correct the moment digits stack. */
 .mono,
 .num {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -325,7 +340,7 @@ select {
 }
 
 .rail-fact-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   opacity: 0.75;
 }
@@ -587,7 +602,7 @@ select {
   letter-spacing: -0.025em;
   margin-top: 7px;
   line-height: 1.15;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -640,7 +655,7 @@ select {
 .chart-axis-label {
   font-size: 10.5px;
   fill: var(--text-3);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .chart-empty {
@@ -673,7 +688,7 @@ select {
 
 .tooltip-value {
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -714,7 +729,7 @@ select {
 .bar-value {
   font-size: 12.5px;
   font-weight: 550;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-variant-numeric: tabular-nums;
   min-width: 82px;
   text-align: right;
@@ -787,7 +802,7 @@ select {
 }
 
 .row-amount {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 13.5px;
   font-weight: 600;
@@ -958,7 +973,7 @@ select {
   gap: 5px;
   font-size: 11px;
   color: var(--text-3);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
