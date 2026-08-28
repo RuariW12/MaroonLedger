@@ -282,7 +282,7 @@ select {
   background: linear-gradient(135deg, var(--brand) 0%, #d94a63 100%);
   display: grid;
   place-items: center;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 14px;
   color: #fff;
   flex-shrink: 0;
@@ -290,14 +290,14 @@ select {
 
 .rail-name {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--rail-text-strong);
   letter-spacing: -0.01em;
 }
 
 .rail-label {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--rail-text);
@@ -315,7 +315,7 @@ select {
   border-radius: var(--radius-sm);
   color: var(--rail-text);
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: left;
   transition: background 0.12s, color 0.12s;
 }
@@ -328,7 +328,7 @@ select {
 .rail-link.active {
   background: var(--rail-active);
   color: var(--rail-text-strong);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .rail-link svg {
@@ -377,13 +377,13 @@ select {
   display: grid;
   place-items: center;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   flex-shrink: 0;
 }
 
 .rail-user-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--rail-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -416,8 +416,8 @@ select {
 
 .topbar-title {
   font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .topbar-sub {
@@ -554,7 +554,7 @@ select {
 
 .card-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.005em;
 }
 
@@ -599,16 +599,16 @@ select {
 
 .stat-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-3);
 }
 
 .stat-value {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
   margin-top: 7px;
   line-height: 1.15;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -644,7 +644,7 @@ select {
   align-items: center;
   gap: 3px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -698,7 +698,7 @@ select {
 }
 
 .tooltip-value {
-  font-weight: 600;
+  font-weight: 500;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
   font-variant-numeric: tabular-nums;
@@ -740,7 +740,7 @@ select {
 
 .bar-value {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 400;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
   font-variant-numeric: tabular-nums;
@@ -779,7 +779,7 @@ select {
   place-items: center;
   flex-shrink: 0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   background: var(--brand-soft);
   color: var(--brand);
 }
@@ -791,7 +791,7 @@ select {
 
 .row-title {
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -819,7 +819,7 @@ select {
     "Liberation Mono", monospace;
   font-variant-numeric: tabular-nums;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -836,7 +836,7 @@ select {
   padding: 2px 7px;
   border-radius: 5px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   background: var(--surface-3);
@@ -871,7 +871,7 @@ select {
 
 .empty-title {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-2);
 }
 
@@ -898,7 +898,7 @@ select {
 
 .field-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-2);
 }
 
@@ -954,7 +954,7 @@ select {
 
 .insight-group-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
@@ -978,7 +978,7 @@ select {
 .insight-bullet {
   color: var(--brand);
   flex-shrink: 0;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .provider-tag {
@@ -1022,7 +1022,7 @@ select {
 
 .auth-title {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.015em;
 }
 
