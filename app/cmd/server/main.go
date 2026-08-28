@@ -197,6 +197,26 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// firstNonEmpty returns the first value that is set, so a secret's fields take
+// precedence over the environment without either having to be complete.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// nonZero renders an int as a string, treating 0 as absent so it can take part
+// in firstNonEmpty.
+func nonZero(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
 // connectDatabase resolves credentials from Secrets Manager when running on
 // ECS (where the secret is injected as a JSON blob) and from discrete
 // environment variables locally.
@@ -214,8 +234,22 @@ func connectDatabase() (*sql.DB, error) {
 			// password, and a parse error would otherwise put it in the logs.
 			return nil, &configError{"DB_CREDENTIALS is not valid JSON"}
 		}
-		return database.Connect(parsed.Host, strconv.Itoa(parsed.Port), parsed.Username,
-			parsed.Password, parsed.DBName, "require")
+
+		// An RDS-managed master secret contains only username and password,
+		// because that is all RDS rotates. Host, port and database name are
+		// not secret and arrive as ordinary environment variables. A
+		// self-managed secret may carry all five, so whatever the secret does
+		// provide wins and the environment fills the rest.
+		host := firstNonEmpty(parsed.Host, os.Getenv("DB_HOST"))
+		port := firstNonEmpty(nonZero(parsed.Port), getEnv("DB_PORT", "5432"))
+		dbname := firstNonEmpty(parsed.DBName, os.Getenv("DB_NAME"))
+
+		if host == "" || dbname == "" {
+			return nil, &configError{"DB_HOST and DB_NAME must be set when DB_CREDENTIALS omits them"}
+		}
+
+		return database.Connect(host, port, parsed.Username, parsed.Password, dbname,
+			getEnv("DB_SSLMODE", "require"))
 	}
 
 	return database.Connect(

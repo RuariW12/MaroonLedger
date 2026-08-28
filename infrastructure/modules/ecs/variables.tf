@@ -71,3 +71,20 @@ variable "auth_client_id" {
   description = "Cognito app client ID the token's client_id claim must match"
   type        = string
 }
+
+variable "db_host" {
+  description = "RDS hostname (address only, no port)"
+  type        = string
+}
+
+variable "db_port" {
+  description = "RDS port"
+  type        = number
+  default     = 5432
+}
+
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "maroonledger"
+}

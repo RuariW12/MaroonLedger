@@ -56,6 +56,14 @@ resource "aws_ecs_task_definition" "app" {
         # Not a secret: the client ID is public by design and ships in the
         # frontend bundle. It is an audience check, not a credential.
         { name = "AUTH_CLIENT_ID", value = var.auth_client_id },
+
+        # Connection coordinates are not secret; only the credentials are, and
+        # those arrive through `secrets` below. The RDS-managed secret holds
+        # username and password only, so these must be supplied here.
+        { name = "DB_HOST", value = var.db_host },
+        { name = "DB_PORT", value = tostring(var.db_port) },
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_SSLMODE", value = "require" },
       ]
 
       secrets = [

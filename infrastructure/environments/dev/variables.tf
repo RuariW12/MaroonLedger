@@ -47,3 +47,39 @@ variable "bedrock_model" {
   type        = string
   default     = ""
 }
+
+variable "domain_name" {
+  description = "Domain for the application, e.g. maroonledger.com. Empty disables Route 53, ACM, and the HTTPS listener; everything else applies normally."
+  type        = string
+  default     = ""
+}
+
+variable "create_hosted_zone" {
+  description = "Create the Route 53 hosted zone. Set false if the zone already exists."
+  type        = bool
+  default     = true
+}
+
+variable "single_nat_gateway" {
+  description = "Share one NAT Gateway across both AZs. Saves ~$32/month; set false for production resilience."
+  type        = bool
+  default     = true
+}
+
+variable "create_vpc_endpoints" {
+  description = "Create interface VPC endpoints. Each is billed hourly per AZ (~$7/month each here), so this is off by default."
+  type        = bool
+  default     = false
+}
+
+variable "enable_password_rotation" {
+  description = "Let RDS rotate the database master password automatically"
+  type        = bool
+  default     = true
+}
+
+variable "alert_email" {
+  description = "Address subscribed to the alerts topic. The subscription must be confirmed by email before alerts arrive."
+  type        = string
+  default     = ""
+}

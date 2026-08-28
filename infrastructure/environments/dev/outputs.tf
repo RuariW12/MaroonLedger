@@ -42,3 +42,18 @@ output "cognito_issuer" {
   description = "OIDC issuer the API validates tokens against"
   value       = module.cognito.issuer
 }
+
+output "alerts_topic_arn" {
+  description = "SNS topic receiving GuardDuty findings and CloudWatch alarms"
+  value       = module.observability.alerts_topic_arn
+}
+
+output "route53_name_servers" {
+  description = "Name servers to set at the registrar. Only populated when Terraform creates the hosted zone."
+  value       = module.dns.name_servers
+}
+
+output "application_url" {
+  description = "Public URL of the application"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${module.cdn.cloudfront_domain_name}"
+}

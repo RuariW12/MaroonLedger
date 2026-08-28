@@ -14,16 +14,7 @@ module "alb" {
 
   enable_deletion_protection = false
 
-  listeners = {
-    http = {
-      port     = 80
-      protocol = "HTTP"
-
-      forward = {
-        target_group_key = "ecs"
-      }
-    }
-  }
+  listeners = local.listeners
 
   target_groups = {
     ecs = {

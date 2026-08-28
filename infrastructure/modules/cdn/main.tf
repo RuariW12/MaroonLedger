@@ -41,9 +41,11 @@ resource "aws_cloudfront_distribution" "main" {
     origin_id   = "alb"
 
     custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
+      http_port  = 80
+      https_port = 443
+      # Once the ALB has its own certificate, the CloudFront-to-origin hop is
+      # encrypted too, closing the last plaintext segment on the public path.
+      origin_protocol_policy = var.alb_certificate_arn != "" ? "https-only" : "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
@@ -71,11 +73,22 @@ resource "aws_cloudfront_distribution" "main" {
 
     forwarded_values {
       query_string = true
-      headers      = ["Authorization", "Origin"]
+      # Authorization must reach the origin or every API call is rejected.
+      # Including it also keeps one user's responses out of another's cache.
+      headers = ["Authorization", "Origin"]
       cookies {
-        forward = "all"
+        # Authentication is bearer-token based, so cookies are not part of the
+        # request identity and only add cache-key entropy.
+        forward = "none"
       }
     }
+
+    # API responses must never be cached. Without these, CloudFront applies its
+    # 24-hour default TTL: account balances would go stale, and a response
+    # would still be served from the edge after the user signed out.
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
   }
 
   custom_error_response {
@@ -96,8 +109,17 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # A custom domain requires a matching ACM certificate in us-east-1; without
+  # one the distribution keeps its *.cloudfront.net name and default cert.
+  aliases = var.domain_name != "" && var.acm_certificate_arn != "" ? [var.domain_name] : []
+
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.acm_certificate_arn == ""
+
+    acm_certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    ssl_support_method  = var.acm_certificate_arn != "" ? "sni-only" : null
+    # Drops TLS 1.0/1.1 for viewers. Only applies with a custom certificate.
+    minimum_protocol_version = var.acm_certificate_arn != "" ? "TLSv1.2_2021" : null
   }
 
   tags = {
@@ -201,6 +223,54 @@ resource "aws_wafv2_web_acl" "main" {
       sampled_requests_enabled   = true
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.project_name}-sqli-rules"
+    }
+  }
+
+  # Blocks request patterns that are never legitimate -- malformed headers,
+  # path traversal, host-header injection.
+  rule {
+    name     = "aws-managed-known-bad-inputs"
+    priority = 4
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-known-bad-inputs"
+    }
+  }
+
+  # AWS-maintained list of sources associated with bots, scanners and botnets.
+  # Cheap to evaluate and filters a large share of background noise.
+  rule {
+    name     = "aws-managed-ip-reputation"
+    priority = 5
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesAmazonIpReputationList"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-ip-reputation"
     }
   }
 
