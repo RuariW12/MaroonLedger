@@ -16,22 +16,23 @@ resource "aws_security_group" "alb" {
 # Restricted to CloudFront's edge ranges rather than 0.0.0.0/0. Without this
 # the ALB is directly reachable on its public DNS name, which bypasses the
 # WAF attached to the distribution and makes edge protection decorative.
-resource "aws_vpc_security_group_ingress_rule" "alb_http" {
-  security_group_id = aws_security_group.alb.id
-  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
-  from_port         = 80
-  to_port           = 80
-  ip_protocol       = "tcp"
-  description       = "HTTP from CloudFront edge locations only"
-}
+# One rule per port, and only the ports actually in use.
+#
+# A rule referencing a managed prefix list does not count as one rule -- it
+# counts as the prefix list's entry count. The CloudFront origin-facing list
+# holds roughly 55 entries against a default quota of 60 rules per security
+# group, so a second prefix-list rule cannot fit. Opening only the port
+# CloudFront actually reaches the origin on is both the fix and the more
+# correct posture: without a certificate that is port 80, with one it is 443.
+resource "aws_vpc_security_group_ingress_rule" "alb_from_cloudfront" {
+  for_each = toset([for p in var.alb_ingress_ports : tostring(p)])
 
-resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
   prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
-  from_port         = 443
-  to_port           = 443
+  from_port         = tonumber(each.value)
+  to_port           = tonumber(each.value)
   ip_protocol       = "tcp"
-  description       = "HTTPS from CloudFront edge locations only"
+  description       = "Port ${each.value} from CloudFront edge locations only"
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_out" {

@@ -33,3 +33,15 @@ variable "db_instance_identifier" {
   type        = string
   default     = ""
 }
+
+variable "enable_guardduty" {
+  description = "Create a GuardDuty detector. Set false where an SCP denies the service or the Organization runs detection centrally."
+  type        = bool
+  default     = true
+}
+
+variable "bucket_suffix" {
+  description = "Suffix for the CloudTrail and Config log buckets. S3 names are global, so a bare project name collides with any account that used it before."
+  type        = string
+  default     = ""
+}

@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "${var.project_name}-cloudtrail-logs"
+  bucket        = "${var.project_name}-cloudtrail-logs${var.bucket_suffix}"
   force_destroy = true
 }
 
@@ -50,7 +50,11 @@ resource "aws_cloudtrail" "main" {
   }
 }
 
+# Gated: some Organizations deny guardduty outright via SCP, and detection is
+# often managed centrally by the org rather than per-account.
 resource "aws_guardduty_detector" "main" {
+  count = var.enable_guardduty ? 1 : 0
+
   enable = true
 
   tags = {
@@ -83,7 +87,7 @@ resource "aws_config_configuration_recorder_status" "main" {
 }
 
 resource "aws_s3_bucket" "config" {
-  bucket        = "${var.project_name}-config-logs"
+  bucket        = "${var.project_name}-config-logs${var.bucket_suffix}"
   force_destroy = true
 }
 

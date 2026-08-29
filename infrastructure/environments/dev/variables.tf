@@ -108,3 +108,33 @@ variable "enable_waf" {
   type        = bool
   default     = true
 }
+
+variable "bucket_suffix" {
+  description = "Suffix appended to globally-named S3 buckets (frontend, CloudTrail, Config). Required whenever the bare project name has been used by another account."
+  type        = string
+  default     = ""
+}
+
+variable "alb_ingress_ports" {
+  description = "Ports the ALB accepts from CloudFront. One port only unless the SG rule quota has been raised -- each prefix-list rule consumes ~55 of 60."
+  type        = list(number)
+  default     = [80]
+}
+
+variable "enable_guardduty" {
+  description = "Create a GuardDuty detector. Set false where an SCP denies it."
+  type        = bool
+  default     = true
+}
+
+variable "rds_multi_az" {
+  description = "Run an RDS standby in a second AZ. Not available to free-tier accounts."
+  type        = bool
+  default     = true
+}
+
+variable "rds_backup_retention_days" {
+  description = "RDS automated backup retention. Free-tier accounts cap this well below the production default."
+  type        = number
+  default     = 7
+}

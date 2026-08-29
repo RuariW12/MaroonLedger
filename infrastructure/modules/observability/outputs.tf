@@ -5,7 +5,7 @@ output "cloudtrail_bucket_name" {
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID"
-  value       = aws_guardduty_detector.main.id
+  value       = one(aws_guardduty_detector.main[*].id)
 }
 
 output "alerts_topic_arn" {

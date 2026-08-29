@@ -32,3 +32,9 @@ variable "enable_waf" {
   type        = bool
   default     = true
 }
+
+variable "bucket_suffix" {
+  description = "Suffix for the frontend bucket. S3 names are global, so a bare project name collides with any account that has ever used it."
+  type        = string
+  default     = ""
+}

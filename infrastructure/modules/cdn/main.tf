@@ -1,20 +1,47 @@
-module "s3_frontend" {
-  source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "~> 4.0"
+# Plain resources rather than terraform-aws-modules/s3-bucket.
+#
+# The community module was rejected by this Organization's SCP on
+# CreateBucket, while an identical bucket created from a plain resource
+# succeeds -- the module sends request parameters the policy refuses. Beyond
+# unblocking that, this matches how the observability buckets are already
+# written and makes the exact API call visible in the code.
+resource "aws_s3_bucket" "frontend" {
+  bucket        = "${var.project_name}-frontend${var.bucket_suffix}"
+  force_destroy = true
 
-  bucket = "${var.project_name}-frontend"
+  tags = {
+    Terraform   = "true"
+    Environment = "dev"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
 
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
 
-  control_object_ownership = true
-  object_ownership         = "BucketOwnerEnforced"
+# The bucket is reached only through CloudFront's Origin Access Control, so
+# ACLs have no role and are disabled outright.
+resource "aws_s3_bucket_ownership_controls" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
 
-  tags = {
-    Terraform   = "true"
-    Environment = "dev"
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
   }
 }
 
@@ -33,7 +60,7 @@ resource "aws_cloudfront_distribution" "main" {
   web_acl_id = var.enable_waf ? aws_wafv2_web_acl.main[0].arn : null
 
   origin {
-    domain_name              = module.s3_frontend.s3_bucket_bucket_regional_domain_name
+    domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "s3"
     origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
   }
@@ -131,7 +158,7 @@ resource "aws_cloudfront_distribution" "main" {
 }
 
 resource "aws_s3_bucket_policy" "frontend" {
-  bucket = module.s3_frontend.s3_bucket_id
+  bucket = aws_s3_bucket.frontend.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -143,7 +170,7 @@ resource "aws_s3_bucket_policy" "frontend" {
           Service = "cloudfront.amazonaws.com"
         }
         Action   = "s3:GetObject"
-        Resource = "${module.s3_frontend.s3_bucket_arn}/*"
+        Resource = "${aws_s3_bucket.frontend.arn}/*"
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
@@ -159,6 +186,10 @@ resource "aws_s3_bucket_policy" "frontend" {
 # Defaults on, because a public distribution without a WAF is the wrong
 # architecture; turning it off is a deliberate, environment-specific decision.
 resource "aws_wafv2_web_acl" "main" {
+  # A CLOUDFRONT-scoped ACL exists only in us-east-1, whatever region the rest
+  # of the stack runs in.
+  provider = aws.us_east_1
+
   count = var.enable_waf ? 1 : 0
 
   name  = "${var.project_name}-waf"

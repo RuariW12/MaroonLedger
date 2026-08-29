@@ -5,9 +5,10 @@ module "vpc" {
 }
 
 module "security_groups" {
-  source       = "../../modules/security-groups"
-  project_name = var.project_name
-  vpc_id       = module.vpc.vpc_id
+  source            = "../../modules/security-groups"
+  project_name      = var.project_name
+  vpc_id            = module.vpc.vpc_id
+  alb_ingress_ports = var.alb_ingress_ports
 }
 
 # Separate from the VPC module to avoid a dependency cycle: the endpoints need
@@ -35,6 +36,8 @@ module "rds" {
   rds_security_group_id      = module.security_groups.rds_security_group_id
   kms_key_arn                = module.kms.kms_key_arn
   enable_password_rotation   = var.enable_password_rotation
+  multi_az                   = var.rds_multi_az
+  backup_retention_days      = var.rds_backup_retention_days
 }
 
 # DNS and TLS. Inert until var.domain_name is set, which is what lets the
@@ -120,9 +123,13 @@ module "cdn" {
   acm_certificate_arn = module.dns.edge_certificate_arn
   alb_certificate_arn = module.dns.alb_certificate_arn
   enable_waf          = var.enable_waf
+  bucket_suffix       = var.bucket_suffix
 
+  # The module takes the default provider; only its WAF resource uses the
+  # us-east-1 alias.
   providers = {
-    aws = aws.us_east_1
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
   }
 }
 
@@ -131,6 +138,8 @@ module "observability" {
   project_name = var.project_name
 
   alert_email             = var.alert_email
+  enable_guardduty        = var.enable_guardduty
+  bucket_suffix           = var.bucket_suffix
   alb_arn_suffix          = module.alb.alb_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
   db_instance_identifier  = module.rds.db_instance_identifier

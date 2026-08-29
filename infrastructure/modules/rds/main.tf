@@ -29,14 +29,14 @@ module "rds" {
   master_user_password_rotate_immediately                = false
   master_user_password_rotation_automatically_after_days = var.password_rotation_days
 
-  multi_az               = true
+  multi_az               = var.multi_az
   db_subnet_group_name   = var.database_subnet_group_name
   vpc_security_group_ids = [var.rds_security_group_id]
 
   storage_encrypted = true
   kms_key_id        = var.kms_key_arn
 
-  backup_retention_period = 7
+  backup_retention_period = var.backup_retention_days
   deletion_protection     = var.deletion_protection
   skip_final_snapshot     = var.skip_final_snapshot
 

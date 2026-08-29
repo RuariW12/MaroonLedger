@@ -22,3 +22,22 @@ ai_provider = "bedrock"
 
 # Alerts go only to you; nothing here is committed.
 alert_email = "you@example.com"
+
+# --- Constraints discovered on the first apply against this account ---------
+
+# S3 names are global and the old account still holds the bare names.
+bucket_suffix = "-4cc78b"
+
+# A prefix-list rule consumes ~55 of the 60-rule-per-SG quota, so only one
+# fits. Port 80 is what CloudFront uses to reach the origin without a
+# certificate; with one, this becomes [443].
+alb_ingress_ports = [80]
+
+# SCP p-izeoipcc denies guardduty:CreateDetector outright.
+enable_guardduty = false
+
+# This is a free-tier account: Multi-AZ is unavailable and backup retention is
+# capped below the production default of 7. Both are wrong for production and
+# correct for a disposable demo.
+rds_multi_az              = false
+rds_backup_retention_days = 0
