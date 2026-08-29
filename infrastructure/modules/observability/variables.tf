@@ -10,6 +10,12 @@ variable "alert_email" {
   default     = ""
 }
 
+variable "enable_alarms" {
+  description = "Create the service health alarms. Must be statically known: gating on whether a dimension is empty makes count depend on an apply-time value, which Terraform rejects."
+  type        = bool
+  default     = true
+}
+
 variable "alb_arn_suffix" {
   description = "ALB ARN suffix for CloudWatch dimensions. Empty skips the ALB alarms."
   type        = string

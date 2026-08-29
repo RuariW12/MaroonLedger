@@ -112,11 +112,18 @@ resource "aws_sns_topic_policy" "alerts" {
 }
 
 # --- Service health alarms --------------------------------------------------
+#
+# Each alarm's count keys off a static bool rather than off whether its
+# dimension string is empty. The dimensions come from the ALB and RDS modules
+# and are unknown until apply, and Terraform cannot evaluate `count` against an
+# unknown value -- gating on them fails the plan outright with "Invalid count
+# argument". The caller knows at configuration time whether these targets will
+# exist, so that is where the decision belongs.
 
 # The application is returning errors to users. This is the alarm that
 # corresponds most directly to "the site is broken".
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
-  count = var.alb_arn_suffix != "" ? 1 : 0
+  count = var.enable_alarms ? 1 : 0
 
   alarm_name          = "${var.project_name}-alb-5xx"
   alarm_description   = "Application is returning server errors through the ALB"
@@ -139,7 +146,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 # Every task failing its health check means the service is down even though
 # the ALB itself is fine.
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
-  count = var.alb_arn_suffix != "" && var.target_group_arn_suffix != "" ? 1 : 0
+  count = var.enable_alarms ? 1 : 0
 
   alarm_name          = "${var.project_name}-no-healthy-targets"
   alarm_description   = "No healthy ECS tasks are registered with the target group"
@@ -161,7 +168,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  count = var.db_instance_identifier != "" ? 1 : 0
+  count = var.enable_alarms ? 1 : 0
 
   alarm_name          = "${var.project_name}-rds-cpu-high"
   alarm_description   = "RDS CPU sustained above 80%"
@@ -181,7 +188,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 # db.t4g.micro allows roughly 340 connections. Alarming well below that leaves
 # room to react before the pool starts refusing writes.
 resource "aws_cloudwatch_metric_alarm" "rds_connections" {
-  count = var.db_instance_identifier != "" ? 1 : 0
+  count = var.enable_alarms ? 1 : 0
 
   alarm_name          = "${var.project_name}-rds-connections-high"
   alarm_description   = "RDS connection count approaching the instance limit"
@@ -199,7 +206,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_connections" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_storage" {
-  count = var.db_instance_identifier != "" ? 1 : 0
+  count = var.enable_alarms ? 1 : 0
 
   alarm_name          = "${var.project_name}-rds-storage-low"
   alarm_description   = "RDS free storage below 2 GB"
