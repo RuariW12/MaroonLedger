@@ -1,8 +1,3 @@
-resource "random_password" "db_password" {
-  length  = 32
-  special = false
-}
-
 module "rds" {
   source  = "terraform-aws-modules/rds/aws"
   version = "~> 6.0"
@@ -18,12 +13,21 @@ module "rds" {
   allocated_storage     = 20
   max_allocated_storage = 100
 
-  db_name  = "maroonledger"
-  username = "dbadmin"
-  password = random_password.db_password.result
+  db_name  = var.db_name
+  username = var.db_username
   port     = 5432
 
-  manage_master_user_password = false
+  # RDS creates the master password, stores it in Secrets Manager, and rotates
+  # it natively. This replaces a Terraform-generated random_password, which had
+  # two problems: the password was written to state in plaintext, and rotating
+  # it would otherwise require a Lambda in the VPC. Nothing here ever sees the
+  # value.
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = var.kms_key_arn
+
+  manage_master_user_password_rotation                   = var.enable_password_rotation
+  master_user_password_rotate_immediately                = false
+  master_user_password_rotation_automatically_after_days = var.password_rotation_days
 
   multi_az               = true
   db_subnet_group_name   = var.database_subnet_group_name
@@ -33,30 +37,15 @@ module "rds" {
   kms_key_id        = var.kms_key_arn
 
   backup_retention_period = 7
-  deletion_protection     = false
-  skip_final_snapshot     = true
+  deletion_protection     = var.deletion_protection
+  skip_final_snapshot     = var.skip_final_snapshot
+
+  # Postgres logs go to CloudWatch so they survive instance replacement and
+  # are searchable alongside the application's own logs.
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   tags = {
     Terraform   = "true"
     Environment = "dev"
   }
-}
-
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${var.project_name}-db-credentials"
-  description = "RDS credentials for ${var.project_name}"
-  kms_key_id  = var.kms_key_arn
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-
-  secret_string = jsonencode({
-    username = "dbadmin"
-    password = random_password.db_password.result
-    host     = module.rds.db_instance_address
-    port     = 5432
-    dbname   = "maroonledger"
-  })
 }

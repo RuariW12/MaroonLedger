@@ -12,3 +12,8 @@ output "frontend_bucket_name" {
   description = "S3 bucket name for frontend deployment"
   value       = module.s3_frontend.s3_bucket_id
 }
+
+output "cloudfront_hosted_zone_id" {
+  description = "CloudFront's fixed hosted zone ID, used for Route 53 alias records"
+  value       = aws_cloudfront_distribution.main.hosted_zone_id
+}

@@ -27,3 +27,8 @@ output "azs" {
   description = "Availability zones used"
   value       = module.vpc.azs
 }
+
+output "private_route_table_ids" {
+  description = "Route table IDs for the private-app subnets (used by the S3 gateway endpoint)"
+  value       = module.vpc.private_route_table_ids
+}

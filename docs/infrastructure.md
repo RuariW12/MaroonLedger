@@ -1,233 +1,524 @@
+# Infrastructure
+
+A service-by-service account of what MaroonLedger deploys, why each choice was
+made, and what was deliberately left out.
+
+Everything described here exists in `infrastructure/`. Where a component is
+optional or disabled by default, that is stated explicitly — this document is
+meant to survive someone reading it with the Terraform open next to it.
+
+**Defaults at a glance.** Several components cost real money and are therefore
+off by default. The stack applies and runs without any of them:
+
+| Variable | Default | Effect when enabled |
+|---|---|---|
+| `domain_name` | `""` | Route 53 zone, two ACM certificates, HTTPS on the ALB, custom domain on CloudFront |
+| `create_vpc_endpoints` | `false` | Seven interface endpoints + S3 gateway endpoint (~$50/month) |
+| `single_nat_gateway` | `true` | `false` gives one NAT Gateway per AZ (+~$32/month, removes an SPOF) |
+| `cognito_advanced_security_mode` | `"OFF"` | Compromised-credential detection and adaptive auth (billed per MAU) |
+| `ai_provider` | `"bedrock"` | Bedrock IAM policy on the task role; `"stub"` attaches nothing |
+| `alert_email` | `""` | Email subscription to the alerts topic |
+
+---
 
 ## Layer 1: DNS & Edge
 
-This layer is the public entry point for the application: resolving the domain, serving content from edge locations, and filtering malicious traffic before it reaches the VPC. It's made up of three services: **Amazon Route 53**, **Amazon CloudFront**, and **AWS WAF**.
+The public entry point: resolving the domain, serving content from edge
+locations, and filtering malicious traffic before it reaches the VPC.
 
-### Amazon Route 53
+### Amazon Route 53 & AWS Certificate Manager
 
-**What it is.** AWS's managed DNS service, backed by a 100% uptime SLA.
+**Status.** Implemented in `modules/dns`, inert until `domain_name` is set.
 
-**Role in this architecture.** Route 53 hosts the authoritative DNS records for the app's domain and resolves user requests to the CloudFront distribution using an alias record.
+**Role.** Route 53 hosts the zone and resolves the apex to the CloudFront
+distribution through an alias record. ACM issues the certificates.
 
-**Why this choice.** Alias records resolve directly to AWS resources without the extra hop of a standard DNS lookup, and Route 53 integrates cleanly with Cognito, CloudFront, and ACM. It also supports health checks and failover routing if the project ever goes multi-region.
+Two certificates are required, because they live in different places:
+
+- The **CloudFront certificate must be in `us-east-1`**, whatever region the
+  rest of the stack runs in. This is a CloudFront constraint, not a preference,
+  and is why the environment declares a second aliased AWS provider.
+- The **ALB certificate must be in the ALB's own region** (`us-east-2`).
+
+Both cover the same name and validate through the same hosted zone.
+
+**Why alias records.** An alias resolves directly to the distribution with no
+second lookup, is not billed per query, and can be attached to the zone apex —
+which a CNAME cannot.
+
+**Why the whole layer is optional.** Certificates cannot be issued for a domain
+you do not control, so hardcoding this would make the stack un-appliable for
+anyone without a registered domain. Gating it on one variable keeps the code
+present and reviewable while leaving the stack deployable today.
+
+**Implementation note.** The apex alias record is defined in the environment
+rather than inside the `dns` module. CloudFront needs the certificate the module
+issues, so the module cannot in turn depend on CloudFront's outputs without
+creating a dependency cycle.
 
 ### Amazon CloudFront
 
-**What it is.** AWS's global CDN, delivering content from 400+ edge locations close to end users.
+**Status.** Implemented in `modules/cdn`.
 
-**Role in this architecture.** CloudFront is the single public entry point for all traffic. It serves the static frontend from an S3 origin and forwards `/api/*` requests to the ALB origin via path-based routing. TLS is terminated at the edge using an ACM certificate in `us-east-1`.
+**Role.** The single public entry point. It serves the React bundle from a
+private S3 origin using Origin Access Control, and routes `/api/*` to the ALB
+origin through a path-based cache behaviour.
 
-**Why this choice.** One distribution in front of both origins gives a unified domain, edge caching for static assets, and a single attachment point for WAF. It also includes AWS Shield Standard for free, providing baseline DDoS protection at the edge.
+**Two details that matter more than they look.**
+
+The API behaviour forwards the `Authorization` header. Without it the bearer
+token never reaches the API and every request is rejected. Including it in the
+cache key also keeps one user's responses out of another's cache.
+
+The API behaviour pins `min_ttl`, `default_ttl` and `max_ttl` to `0`. CloudFront
+otherwise applies a 24-hour default TTL, which would serve stale account
+balances and — worse — keep serving a user's data from the edge after they
+signed out.
+
+**Why one distribution for both origins.** A unified domain, edge caching for
+static assets, a single attachment point for WAF, and Shield Standard included
+at no cost.
 
 ### AWS WAF
 
-**What it is.** A managed Web Application Firewall that inspects HTTP/HTTPS requests and blocks anything matching its rule sets.
+**Status.** Implemented, attached to the distribution.
 
-**Role in this architecture.** WAF attaches to the CloudFront distribution via a Web ACL, evaluating every request at the edge. Attacks get blocked before they reach S3 or the ALB, and both origins are protected under one policy.
+**Rules, in evaluation order.** A rate limit of 2,000 requests per 5 minutes per
+IP, then the AWS managed Common, SQLi, Known Bad Inputs, and Amazon IP
+Reputation rule groups.
 
-**Why this choice.** Edge-deployed WAF rejects attacks closer to the source and benefits from CloudFront's caching, which lowers evaluation volume and cost. It also layers cleanly with Shield Standard for volumetric protection.
+**Why at the edge.** Attacks are rejected closer to the source, and CloudFront's
+caching reduces how many requests reach evaluation at all. It layers with Shield
+Standard for volumetric protection.
 
+---
 
 ## Layer 2: Identity
 
-This layer handles user authentication and session management, sitting alongside the edge layer as part of the user-facing surface. It's built around a single service: **Amazon Cognito**.
-
 ### Amazon Cognito
 
-**What it is.** AWS's managed identity service, providing user directories, authentication flows, and token issuance via OAuth 2.0 and OIDC.
+**Status.** Implemented in `modules/cognito`.
 
-**Role in this architecture.** Cognito is the first thing a user interacts with. A Cognito User Pool handles sign-up, sign-in, password resets, and MFA enrollment through Cognito's Hosted UI, and issues a JWT on successful authentication. The frontend attaches that JWT to API calls, and the ECS tasks validate it against Cognito's JWKS endpoint before serving the request.
+**Role.** A user pool handles sign-up, sign-in, password reset and MFA
+enrolment through the hosted UI, and issues JWTs. The frontend attaches the
+access token to API calls; ECS tasks verify it against the pool's JWKS endpoint
+on every request.
 
-**Why this choice.** Cognito removes the need to build and maintain a custom auth stack — password hashing, session storage, MFA, token rotation, account recovery — while still integrating natively with the rest of the AWS ecosystem. The Hosted UI handles the login page out of the box, removing the need to implement Cognito's SRP auth flow in the frontend.
+**Configuration that is load-bearing rather than cosmetic:**
+
+- **`prevent_user_existence_errors = "ENABLED"`.** Without it Cognito returns
+  distinguishable errors for registered and unknown email addresses, which
+  allows an attacker to enumerate users.
+- **`ALLOW_USER_PASSWORD_AUTH` is excluded** from the client's auth flows,
+  forcing SRP. Password-based auth transmits the plaintext password to the
+  Cognito API; SRP proves knowledge of it without sending it.
+- **No client secret.** The client runs in a browser and cannot keep one, so the
+  authorization-code flow is secured with PKCE instead.
+- **TOTP MFA only.** SMS is deliberately not offered — SIM-swap attacks make it
+  the weakest common second factor, and it carries a per-message cost.
+- **A 12-character password policy** requiring all four character classes.
+- **Token revocation enabled**, so signing out invalidates the refresh token
+  rather than leaving it valid until expiry.
+
+**Threat protection is off by default.** Compromised-credential detection and
+adaptive authentication are a paid Cognito tier billed per monthly active user.
+The variable exists and `ENFORCED` is the correct setting for anything holding
+real data; `OFF` is the honest default for a portfolio environment.
+
+**Why Cognito.** It removes password hashing, session storage, MFA enrolment,
+token rotation and account recovery from the codebase, and the hosted UI removes
+the need to implement the SRP flow in the frontend.
+
+**How this is developed against locally.** The API validates an RS256 token
+against a JWKS URL; it has no knowledge of Cognito specifically. Locally that
+URL points at `app/cmd/devidp`, a small identity provider that mints tokens for
+any username. This is why there is **no authentication bypass flag in the
+server** — a bypass that exists in the code is a bypass that can ship. The
+authenticated request path is identical in both environments.
+
+---
 
 ## Layer 3: Networking
 
-This layer defines the virtual network that hosts all application and data resources. It follows industry-standard patterns for isolation, least-privilege egress, and high availability — a multi-tier VPC spanning two Availability Zones, with public-facing and private resources separated by subnet boundaries and traffic flow controlled at the route-table level.
-
 ### VPC & Regional Layout
 
-**What it is.** A Virtual Private Cloud (VPC) is a logically isolated section of the AWS network where resources run inside a user-defined IP range.
-
-**Role in this architecture.** A single VPC deployed in `us-east-2` hosts all compute and data resources. The VPC uses a `/16` CIDR block (`10.0.0.0/16`), leaving room for future subnet expansion.
-
-**Why this choice.** A `/16` CIDR is the standard starting point for a multi-AZ, multi-tier architecture — it provides 65,536 usable addresses, more than enough for future growth, and aligns cleanly with the `/20` subnets used beneath it. `us-east-2` was chosen for its maturity, availability zone count, and proximity to the intended user base.
+A single VPC in `us-east-2` with a `10.0.0.0/16` CIDR — 65,536 addresses, far
+more than needed, leaving room for subnet growth without renumbering.
 
 ### Subnet Tiers
 
-**What it is.** Subnets partition the VPC's IP range into smaller segments, each scoped to a single Availability Zone.
+Three tiers, each spanning two Availability Zones, all `/24` (251 usable
+addresses each):
 
-**Role in this architecture.** The VPC uses a three-tier subnet pattern, repeated across two Availability Zones for high availability:
+| Tier | CIDRs | Contents |
+|---|---|---|
+| Public | `10.0.101.0/24`, `10.0.102.0/24` | ALB, NAT Gateway |
+| Private-app | `10.0.1.0/24`, `10.0.2.0/24` | ECS tasks, VPC endpoint ENIs |
+| Private-data | `10.0.201.0/24`, `10.0.202.0/24` | RDS primary and standby |
 
-- **Public subnets** — host the ALB and NAT Gateways; routes to the internet via the IGW.
-- **Private-app subnets** — host the ECS tasks on EC2, and VPC Endpoints; no direct internet route.
-- **Private-data subnets** — host the RDS primary and standby; fully isolated from the internet.
-
-**Why this choice.** The three-tier pattern enforces separation of concerns at the network layer: only public subnets are reachable from outside the VPC, only private-app subnets can call the database, and the database tier has no route outbound at all. This limits the blast radius of any single compromised resource and aligns with AWS's own reference architectures for web workloads.
+**Why this enforces anything.** The tier separation is real because of the route
+tables, not the names. The private-data route table has **no `0.0.0.0/0` entry
+at all**, which is what actually makes the database tier unable to reach the
+internet in either direction. Subnet labels are documentation; the absence of a
+default route is enforcement.
 
 ### Internet Gateway & NAT Gateways
 
-**What they are.** An Internet Gateway (IGW) is a VPC component that enables two-way communication between the VPC and the public internet. A NAT Gateway allows private subnets to initiate outbound connections to the internet without being reachable from it.
+The IGW carries public traffic to and from the ALB. A NAT Gateway lets ECS tasks
+make outbound connections — pulling packages, reaching AWS APIs not covered by
+an endpoint — without being reachable from outside.
 
-**Role in this architecture.** The IGW attaches to the VPC and routes public traffic to and from the ALB in the public subnets. A NAT Gateway in each public subnet allows ECS tasks in the private-app subnets to pull OS packages and reach services not covered by VPC Endpoints — while blocking all inbound traffic from the internet.
-
-**Why this choice.** Deploying one NAT Gateway per AZ (rather than a single shared one) avoids a cross-AZ data transfer charge and eliminates a single point of failure — if an AZ fails, the other AZ's NAT Gateway keeps outbound traffic flowing.
-
-### Route Tables
-
-**What they are.** Route tables define how traffic is forwarded within the VPC based on destination CIDR.
-
-**Role in this architecture.** Three route tables govern traffic flow:
-
-- **Public route table** — attached to both public subnets; `0.0.0.0/0` routes to the IGW.
-- **Private-app route table** — attached to both private-app subnets; `0.0.0.0/0` routes to the NAT Gateway in the same AZ.
-- **Private-data route table** — attached to both private-data subnets; no `0.0.0.0/0` route, meaning no internet access in either direction.
-
-**Why this choice.** Per-AZ private-app route tables ensure outbound traffic stays within its source AZ, avoiding cross-AZ data transfer costs. Removing the default route entirely from the private-data tier is what actually makes the database tier "isolated" — subnet labels are descriptive, but route tables are what enforce the isolation.
+**One NAT Gateway is shared across both AZs by default.** At roughly $32/month
+each, a second NAT Gateway is the single largest avoidable cost in this stack.
+Sharing one means an AZ failure takes out egress for both private subnets and
+adds a cross-AZ data transfer charge. That is the wrong trade for production and
+a reasonable one for a portfolio environment, so it is a variable
+(`single_nat_gateway`) rather than a hardcoded choice.
 
 ### VPC Endpoints
 
-**What they are.** VPC Endpoints provide private connectivity from inside a VPC to AWS service APIs, without traversing the public internet. Interface endpoints are ENI-based; Gateway endpoints are route-table-based.
+**Status.** Implemented in `modules/vpc-endpoints`, disabled by default.
 
-**Role in this architecture.** Interface endpoints for ECR (API + Docker), CloudWatch Logs, Secrets Manager, and SSM are deployed in each private-app subnet, allowing ECS tasks to pull container images, ship logs, and retrieve secrets without routing through the NAT Gateway. A Gateway endpoint for S3 is attached to the private-app route tables for the same reason.
+Interface endpoints for ECR (API and Docker), CloudWatch Logs, Secrets Manager,
+SSM, SSM Messages, and Bedrock Runtime, plus a Gateway endpoint for S3.
 
-**Why this choice.** Keeping AWS API traffic inside the VPC reduces NAT Gateway data processing charges (a real cost at scale), eliminates dependency on internet reachability for core AWS service calls, and improves the security posture by keeping sensitive traffic — like secret retrieval — off the public internet entirely.
+**Why they are worth having.** Secret retrieval and image pulls never traverse
+the public internet; NAT data-processing charges disappear for that traffic; and
+the tasks keep working if the NAT Gateway or its AZ fails. The S3 gateway
+endpoint is specifically required for image pulls to work without NAT, because
+ECR stores layers in S3.
+
+**Why they are off by default.** Interface endpoints bill hourly per endpoint
+per AZ. Seven endpoints across two AZs is roughly $50/month — more than the rest
+of the stack combined at this scale. The Gateway endpoint is free; only the
+interface endpoints carry the cost.
+
+---
 
 ## Layer 4: Compute
 
-This layer runs the application itself. It sits inside the private-app subnets of the VPC and receives traffic exclusively from the ALB, which terminates user requests forwarded by CloudFront. The layer is built from three components: the **Application Load Balancer**, the **ECS cluster running on EC2**, and the **Auto Scaling Group** that manages the underlying instances.
+### Application Load Balancer
 
-### Application Load Balancer (ALB)
+Deployed across both public subnets. Health checks on `/health` every 30 seconds
+determine which tasks receive traffic.
 
-**What it is.** A Layer 7 load balancer that routes HTTP/HTTPS traffic to backend targets based on path, host, or header rules.
+**With a certificate** (i.e. `domain_name` set) it terminates TLS on 443 using
+`ELBSecurityPolicy-TLS13-1-2-2021-06` — TLS 1.2 floor, 1.3 enabled — and port 80
+issues a 301 redirect. **Without one** it serves HTTP on port 80 only.
 
-**Role in this architecture.** The ALB is deployed across both public subnets with one node per Availability Zone, giving it a presence in each AZ for high availability. It accepts HTTPS traffic from CloudFront on port 443 using an ACM-issued certificate, terminates TLS, and forwards plaintext HTTP to the ECS tasks in the private-app subnets via a target group. Health checks on the target group determine which tasks are eligible to receive traffic.
+Either way, the ALB security group admits traffic **only from CloudFront's
+managed origin-facing prefix list**. This is the control that stops someone
+resolving the ALB's public DNS name and bypassing the WAF entirely; without it,
+edge protection is decorative.
 
-**Why this choice.** An ALB is the right fit for HTTP-based workloads — it supports path-based routing, native integration with ECS, and health-check-driven traffic shaping, none of which the simpler Network Load Balancer provides. Terminating TLS at the ALB (rather than end-to-end TLS into the tasks) keeps certificate management in one place and keeps intra-VPC traffic simple. Restricting inbound on the ALB to the CloudFront origin-facing prefix list ensures the ALB can't be hit directly, preserving the edge-attached WAF as the only real entry point.
+**Why an ALB rather than an NLB.** Path-based routing, native ECS integration,
+and health-check-driven traffic shaping — none of which a Network Load Balancer
+provides.
 
-### Elastic Container Service (ECS) on EC2
+### Elastic Container Service on Fargate
 
-**What it is.** ECS is AWS's managed container orchestration service. In the EC2 launch type, the ECS control plane schedules tasks onto EC2 instances registered as container hosts in the cluster.
+**Status.** Implemented in `modules/ecs`. Fargate launch type, two tasks,
+256 CPU units / 512 MB each, `awsvpc` networking in the private-app subnets.
 
-**Role in this architecture.** A single ECS cluster runs the application's containerized workload across both private-app subnets. Tasks are defined by a task definition specifying the container image (pulled from ECR), CPU/memory reservations, environment variables, and the IAM task role that grants permissions to retrieve secrets from Secrets Manager and ship logs to CloudWatch. An ECS service maintains the desired task count, replaces unhealthy tasks automatically, and registers healthy tasks with the ALB's target group.
+**Why Fargate rather than EC2 with an Auto Scaling Group.** This is a real
+trade, and the honest reasoning is:
 
-**Why this choice.** ECS on EC2 was chosen over Fargate to demonstrate familiarity with cluster capacity management — sizing instances, managing the ASG, handling container placement — which is a frequent expectation for cloud engineering roles. It also gives finer control over instance types and reserved-instance pricing, which matters more at scale. Fargate would simplify operations but would remove an entire layer of the stack from the learning surface.
+- There is no host layer to patch, harden or replace. On EC2 the ECS-optimised
+  AMI is the team's responsibility to keep current; that is a standing
+  operational cost for a two-task workload.
+- Billing is per-task, not per-instance. An EC2 cluster sized for two small
+  tasks either wastes most of an instance or leaves no headroom to place a
+  replacement task during a deployment.
+- `awsvpc` gives each task its own ENI and security group membership, so the
+  ECS→RDS security group chain describes tasks rather than the hosts they
+  happen to land on.
 
-### Auto Scaling Group (ASG)
+EC2 with an ASG earns its complexity when you need specific instance types, GPU
+or local NVMe, Reserved or Spot pricing at scale, or per-host daemon containers.
+None apply here. The capacity-management skills that launch type demonstrates
+are real, but choosing it for this workload would be justifying infrastructure
+by what it teaches rather than what it needs.
 
-**What it is.** An ASG manages a fleet of EC2 instances, maintaining a target instance count and replacing unhealthy instances automatically based on launch template and scaling policies.
+**IAM: two roles, deliberately.** The **execution role** is used by the ECS
+agent before the container starts — pulling the image, creating log streams,
+resolving the database secret. The **task role** is what application code
+assumes at runtime, and holds the Bedrock permissions. Keeping them separate
+means application code cannot borrow the agent's permissions. Merging them is a
+common and rarely-noticed mistake.
 
-**Role in this architecture.** The ASG spans both private-app subnets and manages the EC2 instances that host the ECS tasks. Instances launch from a hardened launch template using an ECS-optimized AMI, register themselves with the ECS cluster on boot, and are distributed across both AZs for resilience. A target tracking scaling policy adjusts the instance count based on cluster CPU reservation, adding capacity when tasks can't be placed and removing it when capacity is underused.
+**Configuration vs. secrets.** Non-sensitive values (region, AI provider, auth
+issuer, JWKS URL, client ID, database host/port/name) are passed as plain
+`environment` entries. The database credentials are passed via `secrets`, which
+resolves from Secrets Manager at task start and never appears in the task
+definition or in `describe-task-definition` output.
 
-**Why this choice.** The ASG provides both the resilience guarantee (unhealthy instances are replaced without intervention) and the elasticity guarantee (capacity follows demand). Spanning both AZs means an AZ failure removes only half the fleet, and the ASG will replace those instances in the surviving AZ automatically. Target tracking is preferred over step scaling for this workload because it's simpler to configure and produces smoother capacity curves for steady-state traffic.
+The Cognito **client ID is not a secret** and is treated as configuration. It
+identifies the application and ships inside the frontend bundle; it is an
+audience check, not a credential.
+
+---
 
 ## Layer 5: Data
 
-This layer holds the application's persistent state and the sensitive configuration values that support it. It sits in the most tightly-scoped part of the architecture: the private-data subnets, which have no route to the internet in either direction. The layer is built from three components: **Amazon RDS** for the relational database, **Amazon S3** for static frontend assets and object storage, and **AWS Secrets Manager** for credentials and other sensitive values.
+### Amazon RDS (PostgreSQL 16)
 
-### Amazon RDS (PostgreSQL)
+Multi-AZ `db.t4g.micro`, 20 GB scaling to 100 GB, in the private-data subnets,
+reachable only from the ECS security group.
 
-**What it is.** RDS is AWS's managed relational database service, handling provisioning, patching, backups, and failover for a choice of database engines.
+Storage and automated backups are encrypted with the customer-managed KMS key.
+Backups are retained for 7 days. PostgreSQL and upgrade logs are exported to
+CloudWatch so they survive instance replacement.
 
-**Role in this architecture.** A PostgreSQL instance runs in a Multi-AZ configuration, with the primary in one Availability Zone and a synchronous standby in the other. Both instances live in the private-data subnets — a dedicated subnet group scoped to those two AZs — and are reachable only from the ECS tasks via security group reference. The ECS tasks retrieve database credentials from Secrets Manager at startup rather than holding them in environment variables or the container image.
+**Master credentials are managed by RDS**, not by Terraform. This replaced an
+earlier approach that generated the password with `random_password` and wrote it
+into a Secrets Manager secret. That had two problems: **the password was stored
+in Terraform state in plaintext**, and rotating it would have required deploying
+a rotation Lambda inside the VPC. RDS-managed passwords rotate natively on a
+30-day cycle with no additional infrastructure, and nothing in the Terraform ever
+sees the value.
 
-**Why this choice.** Managed RDS eliminates the operational burden of patching, backups, and failover orchestration that would otherwise fall on the team. Multi-AZ is the right availability posture for a stateful tier — synchronous replication guarantees zero data loss on failover, and AWS handles the DNS cutover to the standby automatically within 60–120 seconds. PostgreSQL was chosen over other engines for its feature breadth (JSONB, full-text search, strong constraint support) and its fit with typical financial data modeling. Storage is encrypted at rest with a customer-managed KMS key, and automated backups are retained for seven days with point-in-time recovery enabled.
+The consequence is that the managed secret contains only `username` and
+`password`. Host, port and database name are not secret and reach the
+application as ordinary environment variables; the application merges whichever
+fields the secret actually provides.
+
+**Why Multi-AZ.** Synchronous replication to a standby in the second AZ, with
+AWS handling DNS cutover on failover. **Why PostgreSQL.** JSONB, strong
+constraint support, and exact `DECIMAL` arithmetic, which matters for money.
 
 ### Amazon S3
 
-**What it is.** S3 is AWS's object storage service, designed for 11 nines of durability and virtually unlimited capacity.
+Three buckets, all with public access blocked:
 
-**Role in this architecture.** S3 serves two purposes. First, a bucket hosts the static frontend bundle (HTML, CSS, JavaScript) and is exposed to users through CloudFront using Origin Access Control, which restricts direct bucket access and forces all reads to go through the distribution. Second, a separate bucket stores application-generated objects such as exported reports or user uploads; the ECS tasks write to this bucket via the S3 Gateway Endpoint attached to the private-app route tables, keeping that traffic inside the VPC.
+- **Frontend** — the React bundle, readable only by CloudFront through Origin
+  Access Control.
+- **CloudTrail** — audit log delivery.
+- **AWS Config** — configuration snapshot delivery.
 
-**Why this choice.** Hosting static assets on S3 behind CloudFront is the canonical AWS pattern for web frontends — it separates static delivery from the application tier, offloads traffic to the edge, and costs a fraction of serving static files from ECS. Using Origin Access Control keeps the bucket private while still allowing CloudFront to read from it. The Gateway Endpoint for the application bucket avoids NAT Gateway data processing charges on S3 traffic, which adds up quickly at scale.
+**Why S3 behind CloudFront for static assets.** It separates static delivery
+from the application tier, offloads traffic to the edge, and costs a fraction of
+serving the same files from ECS.
 
 ### AWS Secrets Manager
 
-**What it is.** Secrets Manager is AWS's managed service for storing, rotating, and retrieving sensitive configuration values — database credentials, API keys, third-party tokens — encrypted at rest with KMS.
+Holds the RDS master credentials, encrypted with the customer-managed KMS key
+and retrieved by the ECS execution role at task start. The task role's policy
+scopes access to that specific secret ARN.
 
-**Role in this architecture.** The RDS master credentials and any third-party API keys live in Secrets Manager, encrypted with a customer-managed KMS key. The ECS task role grants read access to specific secret ARNs, and tasks retrieve the values at container startup via the Secrets Manager VPC Endpoint rather than over the public internet. Automatic rotation is configured for the RDS credential, triggering a Lambda-backed rotation every 30 days without application-side changes.
+**Why this rather than environment variables or a baked-in config file.**
+Credentials stay out of source control, out of container images, and out of
+`describe-task-definition`, and every access is recorded in CloudTrail.
 
-**Why this choice.** The alternative — hardcoding credentials in environment variables or baking them into container images — is one of the most common sources of credential leakage in cloud applications. Secrets Manager keeps credentials out of source control, out of images, and out of logs, while giving a clear audit trail of every access through CloudTrail. Automatic rotation for RDS is the feature that justifies Secrets Manager over the cheaper SSM Parameter Store, which lacks native rotation support.
+---
 
-## Layer 6: Observability & Operations
+## Layer 6: AI
 
-This layer covers the services that make the application debuggable, auditable, and defensible in production. None of these services sit in the traffic path — they observe it, record it, and alert on it. The layer is built from four services: **Amazon CloudWatch** for metrics and logs, **AWS CloudTrail** for API-level audit logging, **Amazon GuardDuty** for threat detection, and **AWS KMS** for encryption key management.
+### Amazon Bedrock
+
+**Status.** Implemented in `app/internal/ai`, with IAM in `modules/ecs`.
+
+**Role.** Claude on Bedrock powers three features: transaction categorisation,
+anomaly assessment, and spending insight generation.
+
+**How credentials work.** The application uses the Anthropic SDK's Bedrock
+client, which resolves credentials through the default AWS chain. That means the
+**ECS task role in AWS and the developer's shared credentials file locally, with
+no difference in code**.
+
+**IAM scope.** `bedrock:InvokeModel` and `InvokeModelWithResponseStream`,
+restricted to Anthropic foundation models in-region and to inference profiles in
+this account — not `Resource: "*"`. The policy is only created when the service
+is actually configured for Bedrock.
+
+**Why there is a second implementation.** `ai.Provider` has two
+implementations: `Bedrock`, and a deterministic local `Stub` that uses keyword
+matching and arithmetic. The application never branches on which is in use. This
+means the AI surfaces are fully functional with no AWS account and no inference
+spend, and it makes the behaviour testable without mocking a network service.
+The provider that produced each result is recorded on the row, so stub output is
+never mistaken for real inference.
+
+`AI_PROVIDER` defaults to `stub`, so a misconfiguration cannot silently start
+billing.
+
+**Data minimisation.** Insight generation sends **only aggregated category
+totals** — never individual transaction descriptions, account names, or
+identifiers. Anomaly detection sends per-category aggregates as the baseline
+rather than the rows themselves. The categorisation path is the only one that
+sends a raw description, and it sends exactly one, truncated to 200 characters.
+
+---
+
+## Layer 7: Observability & Operations
+
+Nothing in this layer sits in the traffic path; it observes, records and alerts.
 
 ### Amazon CloudWatch
 
-**What it is.** CloudWatch is AWS's native monitoring service, combining metrics, logs, alarms, and dashboards into a single platform.
+Container logs ship via the `awslogs` driver to a log group with 30-day
+retention. Five alarms publish to the alerts topic:
 
-**Role in this architecture.** CloudWatch ingests metrics from every AWS service in the stack — ALB request counts and latencies, ECS task CPU and memory, RDS connection counts and storage, NAT Gateway throughput — and application logs shipped from ECS tasks via CloudWatch Logs. Log groups are scoped per service with 30-day retention for hot storage, and alarms trigger on SLO-relevant thresholds (5xx error rate, ECS task failures, RDS CPU saturation, ALB target health) with notifications routed to an SNS topic.
+| Alarm | Condition | Why |
+|---|---|---|
+| ALB 5xx | >10 in 5 min | Closest signal to "the site is broken" |
+| Healthy target count | <1 for 2 min | Service is down even though the ALB is fine |
+| RDS CPU | >80% for 10 min | Saturation before it becomes timeouts |
+| RDS connections | >150 for 10 min | Pool exhaustion before writes fail |
+| RDS free storage | <2 GB | Storage exhaustion is unrecoverable in place |
 
-**Why this choice.** CloudWatch is the default observability surface for AWS workloads, and using it keeps the operational story inside a single service rather than stitching together a third-party stack. Metrics are collected automatically for most services without additional instrumentation, and CloudWatch Logs integrates natively with ECS via the `awslogs` log driver. A production deployment would eventually add Container Insights or a third-party APM tool for deeper tracing, but CloudWatch alone covers the essentials.
+The ALB alarms set `treat_missing_data = "notBreaching"`, because "no errors"
+reports as no data rather than zero — without it the alarm sits permanently in
+`INSUFFICIENT_DATA` while the service is healthy.
 
 ### AWS CloudTrail
 
-**What it is.** CloudTrail is AWS's audit service, recording every API call made in the account — who made it, when, from where, and what it changed.
-
-**Role in this architecture.** An organization-wide CloudTrail trail captures all management-plane API activity and delivers it to a dedicated S3 bucket with log file validation enabled. Ninety days of recent activity are queryable directly in the CloudTrail console, and the S3 bucket retains events long-term for compliance. CloudTrail also feeds directly into GuardDuty as one of its primary analysis sources.
-
-**Why this choice.** CloudTrail is the first service a security auditor asks about, and enabling it is effectively required for any production AWS workload. The first trail per account is free, log file validation prevents tampering, and centralizing the S3 destination makes it straightforward to extend into a multi-account setup later. The audit trail is also what makes incident response possible — without it, there's no way to reconstruct who did what during a breach.
+A trail with log file validation enabled, delivering to a dedicated S3 bucket.
+CloudTrail is what makes incident response possible at all: without it there is
+no way to reconstruct who did what. It is also GuardDuty's primary input.
 
 ### Amazon GuardDuty
 
-**What it is.** GuardDuty is AWS's managed threat detection service, continuously analyzing CloudTrail events, VPC Flow Logs, and DNS query logs to identify malicious or anomalous activity.
+Analyses CloudTrail events, VPC Flow Logs and DNS query logs for credential
+exfiltration, cryptomining, and communication with known-malicious hosts.
 
-**Role in this architecture.** GuardDuty runs in the account with all three log sources enabled, generating findings for patterns such as credential exfiltration, cryptocurrency mining on EC2 instances, communication with known-malicious IPs, and anomalous API call patterns. Findings are categorized by severity (low, medium, high) and routed through EventBridge, with high-severity findings triggering an SNS alert for immediate response.
+**Findings are routed, not just recorded.** An EventBridge rule matches findings
+at **severity 4.0 and above** and forwards them to SNS through an input
+transformer that extracts severity, type, region and description. Low-severity
+informational findings are filtered out deliberately — an alert channel that is
+mostly noise stops being read.
 
-**Why this choice.** GuardDuty is the AWS-native intrusion detection story, and it's cheap enough (~$3–10/month at this scale) to be a default enable on any account that holds real data. It doesn't replace a full SIEM, but it catches the most common cloud-specific attack patterns — compromised IAM credentials, mining workloads on stolen capacity, reconnaissance from known-bad IPs — without requiring any agent deployment or log pipeline work.
+### AWS Config
+
+Records resource configuration changes for drift and compliance history.
 
 ### AWS KMS
 
-**What it is.** KMS is AWS's key management service, creating and managing encryption keys used by virtually every AWS service that supports encryption at rest.
+A customer-managed key with automatic annual rotation encrypts RDS storage and
+backups, and the Secrets Manager values. Every use is logged to CloudTrail.
 
-**Role in this architecture.** A customer-managed KMS key encrypts RDS storage and automated backups, S3 bucket contents, Secrets Manager values, EBS volumes on the EC2 container hosts, and selected CloudWatch log groups. Automatic annual rotation is enabled on the key, and key usage is logged to CloudTrail, producing an auditable record of every cryptographic operation.
+**Why customer-managed rather than the AWS-managed default.** Control over the
+key policy, rotation cadence and cross-account access — all of which matter in a
+compliance context even though the underlying cryptography is identical.
 
-**Why this choice.** Using a customer-managed key rather than the AWS-managed default provides control over key policies, rotation cadence, and cross-account access — all of which matter in real compliance contexts even when the underlying cryptography is identical. A single key simplifies the encryption story for this project's scope; a production multi-tenant deployment would typically separate keys by data classification or service boundary.
+The SNS alerts topic uses the **AWS-managed** SNS key rather than this one.
+Sharing a single key across unrelated purposes couples their key policies
+together for no benefit.
 
+---
 
----------------------------------------------------------------------------------------------------
 ## Security Model
 
-Security in this architecture is built on **defense in depth**: no single control is trusted to protect the system on its own. Each tier enforces its own boundary, each service runs with least-privilege permissions, and sensitive data is protected at every point it's stored or moved.
+Defence in depth: no single control is trusted on its own.
 
 ### Network Isolation
 
-The network enforces least privilege through subnet boundaries, route tables, and **security group chaining**. Rather than referencing IP ranges, each security group references the SG of the tier permitted to call it:
+Each tier's security group references the security group of the tier permitted
+to call it, rather than an IP range, so the rules stay correct as resources
+scale:
 
-| Security Group | Inbound Source | Port | Purpose |
+| Security group | Inbound source | Port | Purpose |
 |---|---|---|---|
-| `alb-sg` | CloudFront prefix list | 443 | Accept HTTPS only from CloudFront edges |
-| `ecs-sg` | `alb-sg` | 8080 | Accept app traffic only from the ALB |
-| `rds-sg` | `ecs-sg` | 5432 | Accept DB traffic only from ECS tasks |
-| `vpce-sg` | `ecs-sg` | 443 | Accept endpoint traffic only from ECS tasks |
+| `alb-sg` | CloudFront managed prefix list | 80, 443 | Only CloudFront edges reach the ALB |
+| `ecs-sg` | `alb-sg` | 3000 | App traffic only from the ALB |
+| `rds-sg` | `ecs-sg` | 5432 | Database traffic only from ECS tasks |
+| `vpce-sg` | `ecs-sg` | 443 | Endpoint traffic only from ECS tasks |
 
-Each tier trusts only the tier directly above it, which contains the blast radius of any single compromise. Rules reference SGs instead of CIDRs so they adapt automatically as resources scale.
+CloudFront is the one tier that cannot be chained — it does not live in the VPC
+and has no security group to reference. The AWS-published managed prefix list is
+the closest equivalent.
 
-The CloudFront prefix list is the one non-chained source — CloudFront doesn't live in the VPC and has no SG to reference. AWS publishes a managed list of CloudFront's origin IPs, and restricting the ALB to it prevents direct-to-ALB attacks that bypass the edge.
+The database security group has **no blanket egress rule**; it may only return
+traffic to the ECS security group. This is what stops a compromised database
+being used to reach back out.
 
 ### Identity and Access
 
-User identity is handled by **Cognito**: users authenticate through the Hosted UI, receive a JWT, and the ECS tasks validate that JWT on every request.
+User identity is Cognito-issued JWTs, verified on every request. The verifier
+does four things beyond checking the signature and expiry:
 
-Service identity is handled by **IAM roles**, each scoped to the minimum permissions needed. The ECS task role grants specific secret reads, log writes, and S3 access — nothing more. The ECS task execution role is kept separate from the task role so application code can't access permissions meant for the ECS agent (image pulls, log group creation). Keeping these distinct is a standard but frequently-missed ECS practice.
+1. **Pins the accepted algorithm to RS256.** This is what blocks the `alg: none`
+   and HMAC key-confusion attack families.
+2. **Requires `token_use = "access"`**, so an ID token — issued for the
+   frontend's own use — cannot be replayed as an API credential.
+3. **Checks `client_id`.** A valid signature only proves the pool minted the
+   token, not that it minted it *for us*. Without this, a token issued to any
+   other app client in the same user pool would be accepted.
+4. **Returns a single opaque error** for every rejection. Distinguishing
+   "expired" from "wrong audience" only helps an attacker probe.
+
+Service identity is IAM roles, scoped as described in Layer 4.
+
+**Data is scoped per user in the query, not in the handler.** Accounts carry the
+owner's Cognito `sub`, and every read filters on it. Transactions have no owner
+of their own — ownership is always established by joining through the account —
+so guessing an account ID cannot reach another user's data. An account belonging
+to someone else returns **404, not 403**, because a 403 confirms the ID exists.
+
+### Prompt Injection
+
+Transaction descriptions are user-controlled text that ends up inside a model
+prompt, which puts prompt injection in scope.
+
+The defence is **not** the wording of the system prompt. It is that model output
+is never trusted:
+
+- Categories are constrained by a JSON schema whose `category` field is an enum,
+  and then **re-validated against a closed allowlist in Go**. The schema is
+  enforced on the other side of a network call; the allowlist runs in our own
+  process.
+- Severities are validated against a fixed set and default to `none`, so an
+  unparseable answer can never manufacture an alert.
+- Descriptions are truncated before they reach the prompt.
+- Model output drives no privileged action. The worst outcome of a successful
+  injection is a wrong category on the attacker's own row.
 
 ### Data Protection
 
-All data at rest is encrypted with a **customer-managed KMS key** — RDS storage and backups, S3 buckets, Secrets Manager values, and EBS volumes on the container hosts. The key has automatic annual rotation enabled, and every use is logged to CloudTrail.
+At rest: RDS storage and backups, and Secrets Manager values, under the
+customer-managed KMS key.
 
-All data in transit is encrypted with TLS — user to CloudFront (TLS 1.2+ with ACM), CloudFront to ALB (HTTPS-only origin policy), ECS to RDS (`sslmode=require`), and ECS to AWS APIs (native TLS via VPC Endpoints). The one unencrypted segment is ALB to ECS, inside the VPC and inside a trust boundary — adding TLS there would require certificate management in each container for no threat-model improvement.
+In transit: viewer to CloudFront over TLS 1.2+; CloudFront to ALB over HTTPS
+once a certificate exists; ECS to RDS with `sslmode=require`; ECS to AWS APIs
+over native TLS.
 
-### Secrets
+Without a domain configured, the CloudFront-to-ALB hop is HTTP. It stays inside
+AWS's network and the ALB is reachable only from CloudFront, but it is genuinely
+the weakest link in the current default configuration — and it closes the moment
+`domain_name` is set.
 
-Application credentials live exclusively in **Secrets Manager**, encrypted with the KMS key, retrieved at container startup via the Secrets Manager VPC Endpoint. Automatic rotation is configured for the RDS credential. No credentials exist in source control, container images, or environment variables.
+### Application Hardening
 
-### Edge Protection
+Request bodies are capped at 1 MiB and reject unknown fields, so a client
+sending `user_id` gets an error rather than the impression the server honoured
+it. Amounts are rejected if not finite. Responses carry `nosniff`, `DENY`
+framing, `no-referrer`, `no-store` and HSTS. A per-identity rate limiter caps
+the model-backed endpoints, which is the dimension that maps to spend — WAF's
+per-IP limit does not.
 
-**WAF** is attached to CloudFront via a Web ACL, with managed rule groups covering the OWASP Top 10, known bad inputs, and IP reputation, plus a custom rate-limit rule (2,000 requests per 5 minutes per IP). **Shield Standard** is included automatically and provides baseline DDoS protection at the edge. Edge protection is the first layer, never the only one — the SG chain assumes WAF could be bypassed and still rejects unauthorized traffic at the ALB.
+---
 
-### Audit and Detection
+## Deliberately Not Implemented
 
-**CloudTrail** records every API call in the account and delivers events to a dedicated S3 bucket with log file validation enabled. **GuardDuty** analyzes those events (plus VPC Flow Logs and DNS logs) for malicious patterns — credential exfiltration, cryptocurrency mining, communication with known-bad IPs — and routes high-severity findings to SNS for response. CloudTrail provides the record; GuardDuty provides the interpretation.
+Stated plainly, because an architecture document that only lists what exists is
+half a document.
 
-
----------------------------------------------------------------------------------------------------
+- **A second S3 bucket for user uploads.** The application has no upload
+  feature. The S3 Gateway endpoint that would serve it is already in place.
+- **Container Insights / APM tracing.** CloudWatch metrics and logs cover the
+  failure modes this workload actually has. Distributed tracing earns its cost
+  once there is more than one service.
+- **Organization-wide CloudTrail.** This is a single-account project. The trail
+  is account-scoped; extending it is a configuration change, not a redesign.
+- **WAF logging to Kinesis Firehose.** Sampled requests and CloudWatch metrics
+  are enabled; full request logging is additional cost for little added value
+  at this traffic level.
+- **ALB access logs.** Same reasoning; CloudWatch metrics cover the ALB's
+  behaviour.
+- **A backend-for-frontend holding tokens in httpOnly cookies.** The frontend
+  stores its access token in `sessionStorage`, which is readable by any script
+  on the page. This is the most significant known weakness in the stack and is
+  documented in `app/frontend/src/auth.js` rather than left implicit. It is the
+  right upgrade if this ever holds real money.
+- **Automated tests against live AWS.** The Go test suite covers token
+  verification, the category allowlist, and the stub provider. Nothing tests the
+  Terraform beyond `validate`; there is no Terratest suite.

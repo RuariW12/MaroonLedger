@@ -1,3 +1,17 @@
+# Local development stack.
+#
+# Brings up Postgres, a development identity provider, and the API. The API runs
+# with authentication fully enabled -- there is no local bypass -- so tokens
+# come from the dev-idp instead of Cognito.
+#
+# By default the AI features use the deterministic local stub and no AWS
+# credentials are needed. To exercise real Bedrock inference:
+#
+#   AI_PROVIDER=bedrock docker compose up
+#
+# which passes your AWS credentials through to the API container. See the
+# `api` service below for how that is wired.
+
 services:
   db:
     image: postgres:16
@@ -5,12 +19,123 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: maroonledger
-      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./internal/database/migrations:/docker-entrypoint-initdb.d
+    # Schema is owned by the Go migration runner in internal/database, so the
+    # migrations directory is deliberately NOT mounted into
+    # docker-entrypoint-initdb.d -- doing so would apply it a second time
+    # outside the schema_migrations bookkeeping.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d maroonledger"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # Stands in for the Cognito user pool. Issues signed RS256 tokens to anyone
+  # who asks, which is why it is only ever built from the `devidp` stage and
+  # never included in the production image.
+  devidp:
+    build:
+      context: .
+      target: devidp
+    environment:
+      # The issuer is what the browser sees, so the API validates `iss` against
+      # localhost while fetching keys over the compose network. Splitting these
+      # two values is exactly why the verifier takes them separately.
+      DEVIDP_ISSUER: http://localhost:9000
+      DEVIDP_CLIENT_ID: maroonledger-local
+      DEVIDP_PORT: "9000"
+    ports:
+      - "9000:9000"
+
+  api:
+    build:
+      context: .
+      target: server
+    depends_on:
+      db:
+        condition: service_healthy
+      devidp:
+        condition: service_started
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: maroonledger
+      DB_SSLMODE: disable
+
+      AUTH_ISSUER: http://localhost:9000
+      AUTH_JWKS_URL: http://devidp:9000/.well-known/jwks.json
+      AUTH_CLIENT_ID: maroonledger-local
+
+      AI_PROVIDER: ${AI_PROVIDER:-stub}
+      BEDROCK_MODEL: ${BEDROCK_MODEL:-}
+      AWS_REGION: ${AWS_REGION:-us-east-2}
+
+      # Passed through from your shell for AI_PROVIDER=bedrock. They are read
+      # from the environment, never written into this file or the image -- keep
+      # it that way, since this file is committed.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_PROFILE: ${AWS_PROFILE:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      # Read-only so a container compromise cannot rewrite your credentials.
+      # Harmless when the directory is absent or unused.
+      - ${HOME}/.aws:/home/nonroot/.aws:ro
+
+  # CRA dev server with hot reload. Edits to src/ on the host are picked up
+  # without a rebuild.
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    depends_on:
+      api:
+        condition: service_started
+      devidp:
+        condition: service_started
+    environment:
+      # Inside the compose network the API is `api`; "localhost" here would be
+      # the frontend container itself. Consumed by src/setupProxy.js.
+      API_PROXY_TARGET: http://api:3000
+
+      REACT_APP_AUTH_MODE: dev
+      # The browser runs on the host, so it must reach the dev identity
+      # provider as localhost -- even though the API reaches it as `devidp`.
+      # This is the same issuer/JWKS split the verifier is built around.
+      REACT_APP_DEV_IDP_URL: http://localhost:9000
+
+      # Docker Desktop's bind mounts do not deliver inotify events, so without
+      # polling the watcher never sees a host-side edit.
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # Only source is mounted. Mounting the whole directory would shadow the
+      # image's node_modules with the host's, which breaks on any OS or
+      # architecture mismatch.
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    ports:
+      - "3001:3001"
+
+  # The production bundle served by nginx, with the same static/-vs-/api split
+  # CloudFront performs. Started only with `--profile prod`, on a separate port
+  # so it can run alongside the dev server for comparison.
+  frontend-prod:
+    build:
+      context: ./frontend
+      target: production
+    profiles: ["prod"]
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8080:80"
 
 volumes:
   pgdata:

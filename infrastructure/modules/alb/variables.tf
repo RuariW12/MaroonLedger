@@ -18,3 +18,9 @@ variable "alb_security_group_id" {
   description = "Security group ID for the ALB"
   type        = string
 }
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN for the HTTPS listener. Empty falls back to an HTTP-only listener."
+  type        = string
+  default     = ""
+}
