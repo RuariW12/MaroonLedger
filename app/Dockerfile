@@ -1,7 +1,14 @@
 # Build once, produce two binaries. `server` is the production target; `devidp`
 # is a local-only identity provider and is built only by docker-compose, so a
 # plain `docker build .` can never ship it.
-FROM golang:1.25-alpine AS builder
+# --platform=$BUILDPLATFORM pins the builder to the *native* architecture, and
+# GOARCH comes from the target instead. Go cross-compiles directly, so an
+# amd64 image builds on an arm64 machine at native speed. Without this, Docker
+# runs the whole toolchain under QEMU emulation to match the target, which
+# turns a sub-minute Go build into many minutes.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -10,8 +17,8 @@ RUN go mod download
 COPY . .
 # CGO_ENABLED=0 produces a static binary, which is what allows the runtime
 # stage to carry nothing but the binary and CA certificates.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/devidp ./cmd/devidp
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/devidp ./cmd/devidp
 
 FROM alpine:3.19 AS runtime-base
 # TLS roots are required to reach Bedrock, Secrets Manager, and RDS over SSL.

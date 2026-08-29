@@ -72,9 +72,20 @@ module "cognito" {
   hosted_ui_domain_prefix = var.hosted_ui_domain_prefix
   advanced_security_mode  = var.cognito_advanced_security_mode
 
-  # Once a domain exists, sign-in returns to it rather than to localhost.
-  callback_urls = var.domain_name != "" ? concat(var.auth_callback_urls, ["https://${var.domain_name}/"]) : var.auth_callback_urls
-  logout_urls   = var.domain_name != "" ? concat(var.auth_logout_urls, ["https://${var.domain_name}/"]) : var.auth_logout_urls
+  # Cognito rejects any redirect target not listed here, so the distribution's
+  # own URL has to be registered or hosted-UI sign-in fails with a redirect
+  # mismatch. localhost stays for local development against a real pool; the
+  # custom domain is added once one exists.
+  callback_urls = compact(concat(
+    var.auth_callback_urls,
+    ["https://${module.cdn.cloudfront_domain_name}/"],
+    var.domain_name != "" ? ["https://${var.domain_name}/"] : [],
+  ))
+  logout_urls = compact(concat(
+    var.auth_logout_urls,
+    ["https://${module.cdn.cloudfront_domain_name}/"],
+    var.domain_name != "" ? ["https://${var.domain_name}/"] : [],
+  ))
 }
 
 module "ecs" {
