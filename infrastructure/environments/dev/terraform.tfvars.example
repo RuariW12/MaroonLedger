@@ -1,0 +1,24 @@
+# Compute stack — local values. Gitignored (*.tfvars).
+
+project_name = "maroon-ledger"
+region       = "us-east-2"
+
+# Must be globally unique across all of AWS Cognito. Verified available.
+hosted_ui_domain_prefix = "<globally-unique-prefix>"
+
+# This account's Organization denies wafv2 at CloudFront scope via SCP
+# (p-wbm3ji7m). An SCP overrides IAM, so leaving this true fails the apply.
+enable_waf = false
+
+# container_image intentionally unset -> defaults to the ECR repository this
+# stack creates, tagged :latest.
+
+ai_provider = "bedrock"
+
+# Cost guardrails while the demo is up. Left off by default:
+#   single_nat_gateway   true  -> one NAT instead of two (~$32/mo saved)
+#   create_vpc_endpoints false -> endpoints bill hourly per AZ (~$50/mo)
+#   domain_name          ""    -> no Route 53 or ACM
+
+# Alerts go only to you; nothing here is committed.
+alert_email = "you@example.com"

@@ -1,0 +1,12 @@
+# Data stack — local values. Gitignored (*.tfvars).
+
+project_name = "maroon-ledger"
+region       = "us-east-2"
+
+# This account's Organization denies firehose outright via SCP (p-izeoipcc),
+# in every region. The lake, Glue ETL and Athena still deploy; raw/ is then
+# populated by uploading JSON to S3 directly instead of by streaming ingest.
+enable_firehose = false
+
+budget_alert_emails = ["you@example.com"]
+monthly_budget_usd  = "20"

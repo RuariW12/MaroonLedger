@@ -75,10 +75,13 @@ module "cognito" {
 }
 
 module "ecs" {
-  source                    = "../../modules/ecs"
-  project_name              = var.project_name
-  region                    = var.region
-  container_image           = var.container_image
+  source       = "../../modules/ecs"
+  project_name = var.project_name
+  region       = var.region
+  # Defaults to the repository this stack creates. The ECS service does not
+  # wait for steady state, so applying before an image is pushed succeeds --
+  # tasks simply fail to start until the first push, then recover on their own.
+  container_image           = var.container_image != "" ? var.container_image : "${module.ecr.repository_url}:latest"
   private_subnet_ids        = module.vpc.private_subnet_ids
   ecs_security_group_id     = module.security_groups.ecs_security_group_id
   target_group_arn          = module.alb.target_group_arn

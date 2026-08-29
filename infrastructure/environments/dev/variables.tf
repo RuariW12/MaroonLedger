@@ -9,8 +9,9 @@ variable "region" {
 }
 
 variable "container_image" {
-  description = "Docker image URI for the app container"
+  description = "Docker image URI for the app container. Leave empty to use the ECR repository this stack creates, tagged :latest -- which removes the chicken-and-egg of needing an image URI before the repository exists."
   type        = string
+  default     = ""
 }
 
 variable "hosted_ui_domain_prefix" {
