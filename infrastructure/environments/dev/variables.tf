@@ -101,3 +101,9 @@ variable "data_pipeline_stream_name" {
   type        = string
   default     = ""
 }
+
+variable "enable_waf" {
+  description = "Attach a WAF web ACL to the CloudFront distribution. Set false only where an SCP denies wafv2 at CloudFront scope."
+  type        = bool
+  default     = true
+}

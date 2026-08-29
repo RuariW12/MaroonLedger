@@ -26,3 +26,9 @@ variable "alb_certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "enable_waf" {
+  description = "Attach a WAF web ACL to the distribution. Set false only where an SCP denies wafv2 at CloudFront scope; the distribution then serves without one."
+  type        = bool
+  default     = true
+}

@@ -28,7 +28,9 @@ resource "aws_cloudfront_origin_access_control" "s3" {
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   default_root_object = "index.html"
-  web_acl_id          = aws_wafv2_web_acl.main.arn
+  # Null rather than absent when disabled: CloudFront simply has no web ACL
+  # attached, and every other behaviour of the distribution is unchanged.
+  web_acl_id = var.enable_waf ? aws_wafv2_web_acl.main[0].arn : null
 
   origin {
     domain_name              = module.s3_frontend.s3_bucket_bucket_regional_domain_name
@@ -152,7 +154,13 @@ resource "aws_s3_bucket_policy" "frontend" {
   })
 }
 
+# Gated because some AWS Organizations deny wafv2 at CloudFront scope via SCP,
+# and an SCP sits above IAM -- no amount of account permission overrides it.
+# Defaults on, because a public distribution without a WAF is the wrong
+# architecture; turning it off is a deliberate, environment-specific decision.
 resource "aws_wafv2_web_acl" "main" {
+  count = var.enable_waf ? 1 : 0
+
   name  = "${var.project_name}-waf"
   scope = "CLOUDFRONT"
 

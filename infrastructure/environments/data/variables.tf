@@ -26,6 +26,12 @@ variable "curated_ia_after_days" {
 
 # --- Firehose --------------------------------------------------------------
 
+variable "enable_firehose" {
+  description = "Create the Firehose delivery stream. Set false where an SCP denies the service; the rest of the pipeline still deploys and raw/ is populated by direct S3 upload."
+  type        = bool
+  default     = true
+}
+
 variable "firehose_buffer_size_mb" {
   description = "Firehose buffer size in MB before delivery to S3"
   type        = number

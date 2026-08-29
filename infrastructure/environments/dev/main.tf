@@ -116,6 +116,7 @@ module "cdn" {
   domain_name         = var.domain_name
   acm_certificate_arn = module.dns.edge_certificate_arn
   alb_certificate_arn = module.dns.alb_certificate_arn
+  enable_waf          = var.enable_waf
 
   providers = {
     aws = aws.us_east_1
