@@ -1,6 +1,12 @@
 # Build once, produce two binaries. `server` is the production target; `devidp`
-# is a local-only identity provider and is built only by docker-compose, so a
-# plain `docker build .` can never ship it.
+# is a local-only identity provider that issues tokens without authenticating
+# anyone.
+#
+# `server` is deliberately the LAST stage. `docker build .` with no --target
+# builds whichever stage comes last, so ordering is what decides the default,
+# and the default has to be the safe one. With devidp last, a plain build
+# silently produces an image whose entrypoint hands out tokens to anyone --
+# which is exactly what happened once.
 # --platform=$BUILDPLATFORM pins the builder to the *native* architecture, and
 # GOARCH comes from the target instead. Go cross-compiles directly, so an
 # amd64 image builds on an arm64 machine at native speed. Without this, Docker
@@ -30,16 +36,16 @@ RUN addgroup -g 65532 nonroot && \
     adduser -u 65532 -G nonroot -h /home/nonroot -D nonroot
 WORKDIR /app
 
-FROM runtime-base AS server
-COPY --from=builder /out/server /app/server
-USER nonroot:nonroot
-EXPOSE 3000
-ENTRYPOINT ["/app/server"]
-
-# Local development only. Never deployed: no Terraform or CI path builds this
-# stage, and it issues tokens without authenticating anyone.
+# Local development only, and reached solely by docker-compose naming this
+# stage explicitly. Kept above `server` so it can never be the default target.
 FROM runtime-base AS devidp
 COPY --from=builder /out/devidp /app/devidp
 USER nonroot:nonroot
 EXPOSE 9000
 ENTRYPOINT ["/app/devidp"]
+
+FROM runtime-base AS server
+COPY --from=builder /out/server /app/server
+USER nonroot:nonroot
+EXPOSE 3000
+ENTRYPOINT ["/app/server"]
