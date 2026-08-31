@@ -143,7 +143,10 @@ type HistoricalStat struct {
 	MaxAmount   float64
 }
 
-// CategorySpend is one line of a spending summary.
+// CategorySpend is one line of a spending summary. Total is a positive amount
+// spent, never a signed net -- a category with movement in both directions
+// would otherwise report the difference, which is neither its spending nor its
+// income.
 type CategorySpend struct {
 	Category string
 	Count    int

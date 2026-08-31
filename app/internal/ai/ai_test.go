@@ -131,7 +131,10 @@ func TestStubAnomalyWithNoHistory(t *testing.T) {
 
 // Income must not be counted as spending, or a salary can be reported as the
 // largest "spending" category and every total is inflated.
-func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
+// Income never reaches the stub as a category: handlers.categoryOutflow filters
+// it out in SQL, and every Total that arrives is a positive amount spent. This
+// pins that contract, since the stub reports whatever it is handed.
+func TestStubInsightsRanksSpendingWithoutIncome(t *testing.T) {
 	summary := SpendingSummary{
 		PeriodStart:  time.Now().AddDate(0, -1, 0),
 		PeriodEnd:    time.Now(),
@@ -139,9 +142,8 @@ func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
 		TotalInflow:  3200,
 		TotalOutflow: 600,
 		ByCategory: []CategorySpend{
-			{Category: "income", Count: 1, Total: 3200},
-			{Category: "groceries", Count: 8, Total: -400},
-			{Category: "dining", Count: 5, Total: -200},
+			{Category: "groceries", Count: 8, Total: 400},
+			{Category: "dining", Count: 5, Total: 200},
 		},
 	}
 
@@ -150,14 +152,15 @@ func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Groceries (400 of 600 outgoings) is the top spending category, not
-	// income, despite income having the largest absolute value.
 	if want := "Groceries is your largest spending category"; !contains(got.Observations, want) {
 		t.Errorf("observations did not identify groceries as top spend: %v", got.Observations)
 	}
 	for _, o := range got.Observations {
 		if strings.Contains(o, "3200") {
 			t.Errorf("income leaked into a spending observation: %q", o)
+		}
+		if strings.Contains(o, "-$") {
+			t.Errorf("spending rendered as a negative amount: %q", o)
 		}
 	}
 }
