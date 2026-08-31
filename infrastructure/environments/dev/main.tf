@@ -108,6 +108,7 @@ module "ecs" {
 
   ai_provider   = var.ai_provider
   bedrock_model = var.bedrock_model
+  bedrock_api   = var.bedrock_api
 
   # Wired from the data stack's outputs, by hand rather than through
   # terraform_remote_state. Reading the other stack's state would couple them,

@@ -138,3 +138,9 @@ variable "rds_backup_retention_days" {
   type        = number
   default     = 7
 }
+
+variable "bedrock_api" {
+  description = "Bedrock surface: 'mantle' or 'runtime'."
+  type        = string
+  default     = "mantle"
+}

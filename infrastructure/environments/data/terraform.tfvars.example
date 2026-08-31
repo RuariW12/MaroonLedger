@@ -3,7 +3,7 @@
 project_name = "maroon-ledger"
 region       = "us-east-2"
 
-# This account's Organization denies firehose outright via SCP (p-izeoipcc),
+# Some AWS Organizations deny firehose outright via a service control policy,
 # in every region. The lake, Glue ETL and Athena still deploy; raw/ is then
 # populated by uploading JSON to S3 directly instead of by streaming ingest.
 enable_firehose = false

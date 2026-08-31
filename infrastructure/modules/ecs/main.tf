@@ -51,6 +51,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AWS_REGION", value = var.region },
         { name = "AI_PROVIDER", value = var.ai_provider },
         { name = "BEDROCK_MODEL", value = var.bedrock_model },
+        { name = "BEDROCK_API", value = var.bedrock_api },
         { name = "AUTH_ISSUER", value = var.auth_issuer },
         { name = "AUTH_JWKS_URL", value = var.auth_jwks_url },
         # Not a secret: the client ID is public by design and ships in the
@@ -195,9 +196,14 @@ resource "aws_iam_role_policy" "ecs_task_bedrock" {
         ]
         # Scoped to Anthropic foundation models in this region rather than "*".
         # The task has no reason to invoke any other model or provider.
+        # A "us." inference profile routes requests across several US regions,
+        # and IAM is evaluated against the underlying foundation model in
+        # whichever region serves it -- so pinning the model ARN to one region
+        # fails intermittently and confusingly. The wildcard is on region only;
+        # this still grants nothing beyond Anthropic models.
         Resource = [
-          "arn:aws:bedrock:${var.region}::foundation-model/anthropic.*",
-          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/*"
+          "arn:aws:bedrock:*::foundation-model/anthropic.*",
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
         ]
       }
     ]

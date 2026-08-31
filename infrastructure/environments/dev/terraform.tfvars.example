@@ -6,8 +6,8 @@ region       = "us-east-2"
 # Must be globally unique across all of AWS Cognito. Verified available.
 hosted_ui_domain_prefix = "<globally-unique-prefix>"
 
-# This account's Organization denies wafv2 at CloudFront scope via SCP
-# (p-wbm3ji7m). An SCP overrides IAM, so leaving this true fails the apply.
+# Some AWS Organizations deny wafv2 at CloudFront scope via a service control
+# policy. An SCP overrides IAM, so leaving this true fails the apply there.
 enable_waf = false
 
 # container_image intentionally unset -> defaults to the ECR repository this
@@ -33,7 +33,7 @@ bucket_suffix = "-4cc78b"
 # certificate; with one, this becomes [443].
 alb_ingress_ports = [80]
 
-# SCP p-izeoipcc denies guardduty:CreateDetector outright.
+# Set false where an SCP denies guardduty:CreateDetector.
 enable_guardduty = false
 
 # This is a free-tier account: Multi-AZ is unavailable and backup retention is
@@ -41,3 +41,11 @@ enable_guardduty = false
 # correct for a disposable demo.
 rds_multi_az              = false
 rds_backup_retention_days = 0
+
+# Mantle answers 404 for every model in this account, so use the classic
+# bedrock-runtime path, where the model grants and inference profiles live.
+# Opus is not granted here; Sonnet 4.6 is the best available, and newer models
+# require an inference profile rather than a bare model id.
+bedrock_api   = "runtime"
+bedrock_model = "us.anthropic.claude-sonnet-4-6"
+
