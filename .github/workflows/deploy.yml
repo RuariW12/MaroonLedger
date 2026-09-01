@@ -36,6 +36,11 @@ jobs:
   backend:
     name: API
     runs-on: ubuntu-latest
+    # Inert until the repository is configured. The stack is torn down between
+    # demos, so without this the workflow fails on every push to a repository
+    # that has nothing to deploy into. `vars` is available in a job-level `if`;
+    # `secrets` is not, which is why the secret is checked inside the job.
+    if: vars.FRONTEND_BUCKET != ''
     outputs:
       image: ${{ steps.build.outputs.image }}
     steps:
@@ -47,7 +52,6 @@ jobs:
         run: |
           missing=""
           [ -n "${{ secrets.AWS_ROLE_ARN }}" ] || missing="$missing AWS_ROLE_ARN(secret)"
-          [ -n "${{ vars.FRONTEND_BUCKET }}" ] || missing="$missing FRONTEND_BUCKET(var)"
           [ -n "${{ vars.CF_DISTRIBUTION_ID }}" ] || missing="$missing CF_DISTRIBUTION_ID(var)"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository configuration:$missing"
@@ -84,7 +88,7 @@ jobs:
       # Scans the local image, before the push. Scanning after would mean a
       # vulnerable image exists in the registry even when the gate fails.
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.build.outputs.image }}
           exit-code: '1'
@@ -146,6 +150,7 @@ jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    if: vars.FRONTEND_BUCKET != ''
     # Gated on the API rollout. Publishing a new bundle after a failed or
     # rolled-back backend deploy leaves a UI talking to an API that does not
     # match it, which is worse than not deploying at all.
