@@ -3,6 +3,9 @@
 A service-by-service account of what MaroonLedger deploys, why each choice was
 made, and what was deliberately left out.
 
+The diagrams are in `../README.md` and `data-pipeline.md`; `architecture-inventory.md`
+maps every box on them to the resource behind it.
+
 Everything described here exists in `infrastructure/`. Where a component is
 optional or disabled by default, that is stated explicitly — this document is
 meant to survive someone reading it with the Terraform open next to it.

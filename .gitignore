@@ -25,3 +25,7 @@ config.json
 .terraform/
 tfplan
 *.tfplan
+
+# Python bytecode from the diagram generator
+__pycache__/
+*.pyc
