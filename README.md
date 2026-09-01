@@ -105,63 +105,6 @@ deterministic stub. The stub is a stand-in rather than a fallback: the
 application works with no AWS account, and the logic is testable without mocking
 a network service. Every result records which provider produced it.
 
-## Notable defects
-
-
-**The dashboard and the insights page disagreed by $1,800.** The category query
-summed the signed amount per category, so any category with movement in both
-directions reported the difference. Three $600 transfers into savings canceled
-most of a $2,400 outbound wire, so the category claimed $600 of spending while
-the anomaly panel flagged the $2,400 wire it had just erased. The fix already
-existed: the inflow and outflow function had been corrected earlier and carried a
-comment explaining why per-category nets cannot be reused, but it had never been
-applied to the query above it or to a third copy in the insights handler.
-
-![Category breakdown](docs/images/insights-categories.png)
-
-**A plain `docker build` shipped the wrong binary.** The Dockerfile builds the
-API server and the local dev identity provider, the one that issues tokens to
-anyone. `docker build .` with no `--target` builds whichever stage comes last,
-and the dev IdP was last. That image reached ECR, listened on 9000 while the
-target group probes 3000, failed every health check, and never received traffic.
-Stage order is now the mechanism: the server is last, so the default target is
-the safe one.
-
-## Local development
-
-No AWS account and no credentials. Authentication is fully enabled; tokens come
-from the dev identity provider and go through the same verifier.
-
-```bash
-cd app
-docker compose up --build
-```
-
-Open http://localhost:3001 and sign in with any username. The AI features run
-against the stub, so every screen works offline and costs nothing.
-
-To exercise the production bundle, minified and served by nginx with the same
-static-versus-`/api` split CloudFront performs in AWS:
-
-```bash
-docker compose --profile prod up --build   # nginx on http://localhost:8080
-```
-
-This catches what only breaks in the production build: a missing `REACT_APP_*`
-variable, or SPA routing that works under the dev server's catch-all and not
-under a real one.
-
-Against real Bedrock, and the test suite:
-
-```bash
-AI_PROVIDER=bedrock AWS_PROFILE=your-profile docker compose up --build
-cd app && go test ./...
-```
-
-Nineteen tests across three packages cover JWT verification and its negative
-cases, the category allowlist that contains prompt injection, the anomaly
-baseline logic, and the analytics event schema.
-
 ## Security
 
 Reasoning for each control, and the weaknesses left open, are in
