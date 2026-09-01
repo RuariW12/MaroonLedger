@@ -26,7 +26,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/devidp ./cmd/devidp
 
-FROM alpine:3.19 AS runtime-base
+# Pinned to a minor release rather than :latest, so a base image change is a
+# reviewable commit. 3.19 was carried until Trivy failed the build on
+# CVE-2026-40200 in musl, which that line still ships unpatched; 3.22 is on
+# musl 1.2.5 and clears it.
+FROM alpine:3.22 AS runtime-base
 # TLS roots are required to reach Bedrock, Secrets Manager, and RDS over SSL.
 RUN apk --no-cache add ca-certificates
 
