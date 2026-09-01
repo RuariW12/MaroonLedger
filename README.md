@@ -56,12 +56,15 @@ so you can check its arithmetic:
 
 ## Architecture
 
-![Architecture](docs/images/cloud-project-diagram-v1.png)
+![Architecture](docs/images/architecture-core.png)
 
-I drew this in Lucidchart on day one, before writing any Terraform, and it
-shaped the module layout that followed. It predates the identity, AI and
-analytics work, so treat it as the network and compute picture rather than the
-current one. `docs/infrastructure.md` is the reference that is kept accurate.
+This is generated from `docs/diagrams/`, not drawn by hand, so updating it after
+an infrastructure change is a code edit. The Lucidchart version it replaced had
+drifted badly — it showed four EC2 instances inside the ECS cluster and an Auto
+Scaling group, neither of which ever existed, and one ALB per availability zone
+when an ALB is a single regional resource. Every box above maps to a resource in
+`infrastructure/`; `docs/architecture-inventory.md` is the mapping, so you can
+check it rather than trust it.
 
 | Layer | What's in it |
 |---|---|
@@ -245,7 +248,6 @@ Full walkthrough, schema, cost breakdown and query examples:
 - The access token is held in `sessionStorage`. A backend-for-frontend holding
   it in an httpOnly cookie is the real fix.
 - `GET /api/summary` has no rate limit. The endpoints that cost money do.
-- The architecture diagram predates the Cognito, Bedrock and analytics work.
 - The account is a vended sandbox with SCPs that block Firehose, GuardDuty and
   CloudFront-scope WAF, and pin every region to us-east-2. Those are variables
   defaulting to on, overridden only in gitignored tfvars.

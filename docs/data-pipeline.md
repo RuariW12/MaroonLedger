@@ -11,6 +11,8 @@ needed, no cost. Enabling it is explicit, the same posture as the AI provider.
 
 ## Shape
 
+![Data pipeline](images/architecture-data-pipeline.png)
+
 ```
   POST /api/accounts/{id}/transactions
              │
