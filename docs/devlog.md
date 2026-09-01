@@ -295,3 +295,92 @@ network log - zero font requests, zero `@font-face` faces registered.
 
 Also normalised font-weight 550/650 to 500/600. Those are variable-font weights;
 static system fallbacks round them unpredictably.
+
+## Day 16 - The data pipeline
+
+Added a streaming analytics layer alongside the transactional database. Firehose
+to an S3 lake, a nightly Glue PySpark job producing Parquet, Athena on top.
+
+- Built it as a second root module with its own state key rather than folding it
+  into the dev stack. The compute stack has an hourly floor and wants destroying
+  between demos; the lake costs nothing idle and should survive that. Two stacks
+  with no `terraform_remote_state` between them is what makes `terraform
+  destroy` safe. I wire the outputs across by hand, which feels clumsy and is
+  the entire point — coupling them would defeat the separation.
+- Firehose rather than Kinesis Data Streams. Data Streams bills per shard-hour
+  whether or not anything is written, about $11/month as a floor. Direct PUT has
+  no floor at all.
+- Skipped the Glue crawler entirely. Partition projection describes the layout
+  deterministically, so a new day becomes queryable without anything having to
+  run first. One less scheduled job, one less thing to bill.
+- Decided what the event carries by asking what analytics actually needs. Six
+  fields: id, timestamp, amount, category, provider, severity. No description,
+  no account id, no user. Wrote a test asserting exactly six fields so that a
+  future "just add the description, it'd help with grouping" has to argue with a
+  failing build.
+- `count` can't depend on an apply-time value. A CloudWatch alarm gated on one
+  failed the apply outright; changed it to a static bool.
+
+## Day 17 - Deploying it, and two bugs found by looking
+
+Deployed both stacks to a real account, seeded a demo dataset, and took
+screenshots. Most of the day was spent on things the deploy surfaced.
+
+- The account is a vended sandbox with SCPs above IAM: EC2 pinned to us-east-2,
+  Firehose denied org-wide, GuardDuty denied, WAF denied at CloudFront scope.
+  AdministratorAccess doesn't help — an SCP sits above IAM and can't be
+  overridden from inside. Turned each into a Terraform variable defaulting to
+  the production-correct value and overrode them in gitignored tfvars, so the
+  repo describes the architecture I'd deploy rather than the one this account
+  permitted.
+- Bedrock inference quota is 0.0 for every Claude model in every region here.
+  The integration is real and `cmd/bedrockcheck` exercises it, but the demo runs
+  the stub. Every result records its provider, so the insights page says
+  "analysed by stub" instead of quietly implying inference.
+- Reported "INVOKABLE ✓" from a diagnostic whose catch-all case swallowed the
+  actual error. Worth writing down: a diagnostic that can only print success is
+  not a diagnostic.
+
+**The $1,800 disagreement.** The dashboard said $10,812 of spending, the
+insights page said $9,012, and the category bars summed to the smaller one. The
+category query summed the *signed* amount per category, so anything with
+movement in both directions reported the difference. Three $600 transfers into
+savings cancelled most of a $2,400 outbound wire; the transfer category claimed
+$600 of spending while the anomaly panel a few inches away flagged the $2,400
+wire it had just erased. Every category percentage was inflated to match.
+
+The part I want to remember: the fix already existed. `cashflow()` had been
+corrected weeks earlier and carried a comment spelling out exactly why
+per-category nets can't be reused for this. It had never been applied to the
+query directly above it, or to the third copy of the same query in the insights
+handler. A correct comment sitting next to the bug it describes is worth less
+than no comment at all, because it reads as though someone already checked.
+
+Fixed by aggregating outflows only, so income drops out in SQL instead of being
+filtered by every consumer, and collapsing the three copies into one function.
+Verified against a throwaway Postgres: the old query returns transfer −600
+across 4 rows and lets income in, the new one returns 2400 across 1 row and
+doesn't. No unit test could have caught this — it was found by two numbers on
+screen disagreeing.
+
+**A plain `docker build` shipped the wrong binary.** The Dockerfile builds the
+API server and the dev identity provider. `docker build .` with no `--target`
+builds whichever stage is *last*, and devidp was last. The comment at the top of
+the file asserted the opposite. I pushed that image to ECR and the service sat
+at 1/2 for ten minutes while ECS killed task after task for failing health
+checks — the dev IdP listens on 9000 and the target group probes 3000, so it
+never passed and never received traffic.
+
+That port mismatch is the only reason this was loud. Had they agreed, a public
+endpoint would have been handing out tokens to anyone who asked. Reordered so
+`server` is last: stage order is the mechanism, not the comment, and the default
+target is now the safe one.
+
+- Also fixed the anomaly reason text. When a category has no history the score
+  falls back to an account-wide baseline, but the message still named the
+  category — "11.3x the usual for housing" on the first rent payment, when
+  housing had no history at all to be usual about. The message now names the
+  baseline it actually used. Added a test for both branches.
+- Rewrote the README around the story rather than the feature list, and split
+  the data pipeline out into its own doc. The README had grown to the point
+  where a third of it was one subsystem.

@@ -138,6 +138,14 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 	var totalCount int
 	var totalAmount, overallMax float64
 
+	// Tracks which baseline actually got used, so the reason text can name it.
+	// Reporting the transaction's own category regardless would describe a
+	// comparison that never happened: the first transaction in a new category
+	// has no peers, gets scored against the whole account, and would still
+	// claim to be "11.3x the usual for housing" when housing had no history at
+	// all to be usual about.
+	scope := in.Category
+
 	if in.Category != "" {
 		for _, stat := range baseline {
 			if stat.Category == in.Category {
@@ -150,6 +158,7 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 	}
 
 	if totalCount == 0 {
+		scope = ""
 		for _, stat := range baseline {
 			totalCount += stat.Count
 			totalAmount += math.Abs(stat.TotalAmount)
@@ -183,19 +192,19 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityHigh,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s and more than double the previous largest.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s and more than double the previous largest.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	case amount > mean*3:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityMedium,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	case amount > mean*2:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityLow,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	default:
 		return &AnomalyAssessment{

@@ -186,3 +186,37 @@ func contains(haystack []string, needle string) bool {
 	}
 	return false
 }
+
+// The first transaction in a category has no peers to be measured against, so
+// the score falls back to the whole account. The reason text has to say so:
+// claiming "11.3x the usual for housing" when housing had no history at all is
+// a statement about a comparison that never happened.
+func TestStubAnomalyNamesTheBaselineItActuallyUsed(t *testing.T) {
+	baseline := []HistoricalStat{
+		{Category: "groceries", Count: 39, TotalAmount: -1863.55, MeanAmount: -47.78, MaxAmount: -84.20},
+	}
+
+	fellBack, err := NewStub().DetectAnomaly(context.Background(),
+		TransactionInput{Description: "Monthly rent payment", Amount: -1685, AccountType: "checking", Category: "housing"},
+		baseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(fellBack.Reason, "housing") {
+		t.Errorf("named a category with no history as the baseline: %q", fellBack.Reason)
+	}
+	if !strings.Contains(fellBack.Reason, "this account") {
+		t.Errorf("did not disclose the account-wide fallback: %q", fellBack.Reason)
+	}
+
+	// With history in its own category, the comparison is real and named.
+	inCategory, err := NewStub().DetectAnomaly(context.Background(),
+		TransactionInput{Description: "Wire transfer overseas", Amount: -2400, AccountType: "checking", Category: "transfer"},
+		append(baseline, HistoricalStat{Category: "transfer", Count: 3, TotalAmount: 1800, MeanAmount: 600, MaxAmount: 600}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(inCategory.Reason, "transfer") {
+		t.Errorf("did not name the category it compared within: %q", inCategory.Reason)
+	}
+}
