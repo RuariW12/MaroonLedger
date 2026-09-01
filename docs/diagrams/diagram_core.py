@@ -10,17 +10,17 @@ c.frame(36, 118, 1588, 1094, "AWS Cloud", INK, icon="general/general.png")
 
 # ---- top band -------------------------------------------------------------
 BY, ICY = 158, 232
-c.frame(70,   BY, 560, 178, "Edge",               GREY, fill="#F7F8FA", opacity=0.6)
-c.frame(660,  BY, 180, 178, "Identity",           GREY, fill="#F7F8FA", opacity=0.6)
-c.frame(870,  BY, 180, 178, "AI",                 GREY, fill="#F7F8FA", opacity=0.6)
-c.frame(1080, BY, 470, 178, "Images and secrets", GREY, fill="#F7F8FA", opacity=0.6)
+c.frame(70,   BY, 560, 178, "Edge",               GRAY, fill="#F7F8FA", opacity=0.6)
+c.frame(660,  BY, 180, 178, "Identity",           GRAY, fill="#F7F8FA", opacity=0.6)
+c.frame(870,  BY, 180, 178, "AI",                 GRAY, fill="#F7F8FA", opacity=0.6)
+c.frame(1080, BY, 470, 178, "Images and secrets", GRAY, fill="#F7F8FA", opacity=0.6)
 
 c.node(148,  ICY, "network/route-53.png",                  "Route 53",    "DNS, alias to CF")
 c.node(300,  ICY, "network/cloudfront.png",                "CloudFront",  "TLS, two origins")
 c.node(452,  ICY, "storage/simple-storage-service-s3.png", "S3",          "React bundle")
 c.node(580,  ICY, "security/waf.png",                      "WAF",         "web ACL")
 c.node(750,  ICY, "security/cognito.png",                  "Cognito",     ["user pool,", "hosted UI + PKCE"])
-c.node(960,  ICY, "ml/bedrock.png",                        "Bedrock",     ["Claude: categorise,", "flag, summarise"])
+c.node(960,  ICY, "ml/bedrock.png",                        "Bedrock",     ["Claude: categorize,", "flag, summarize"])
 c.node(1160, ICY, "compute/ec2-container-registry.png",    "ECR",         "app image")
 c.node(1315, ICY, "security/secrets-manager.png",          "Secrets Mgr", "RDS credentials")
 c.node(1470, ICY, "security/key-management-service.png",   "KMS",         "CMK, at rest")
@@ -53,8 +53,8 @@ c.node(1120, APP_Y+86, "compute/fargate.png", "ECS Fargate task", ["256 CPU / 51
 
 EX, EY, EW = 1250, APP_Y+34, 280
 c.frame(EX, EY, EW, 122, "VPC endpoints", TEAL, fill="#FFFFFF", dashed=True)
-c.text(EX+EW/2, EY+52, "ecr.api &#183; ecr.dkr &#183; logs", 11, "400", GREY, "middle")
-c.text(EX+EW/2, EY+69, "secretsmanager &#183; S3 gateway", 11, "400", GREY, "middle")
+c.text(EX+EW/2, EY+52, "ecr.api &#183; ecr.dkr &#183; logs", 11, "400", GRAY, "middle")
+c.text(EX+EW/2, EY+69, "secretsmanager &#183; S3 gateway", 11, "400", GRAY, "middle")
 c.text(EX+EW/2, EY+94, "optional &#183; off by default", 10, "400", ORANGE, "middle")
 
 c.node(380,  DAT_Y+80, "database/rds-postgresql-instance.png", "RDS PostgreSQL 16", "primary")
@@ -62,7 +62,7 @@ c.node(1120, DAT_Y+80, "database/rds-postgresql-instance.png", "RDS standby", "M
 
 # ---- observability --------------------------------------------------------
 OY = 1032
-c.frame(70, OY, 1480, 150, "Observability and audit", GREY, fill="#F7F8FA", opacity=0.6)
+c.frame(70, OY, 1480, 150, "Observability and audit", GRAY, fill="#F7F8FA", opacity=0.6)
 for cx, ic, lb, sb in [
     (245,  "management/cloudwatch.png",                       "CloudWatch", "logs + 5 alarms"),
     (540,  "integration/simple-notification-service-sns.png", "SNS",        "alert topic"),
@@ -86,24 +86,24 @@ c.link([(420, DAT_Y+80), (1080, DAT_Y+80)], "synchronous replication",
 
 # ---- dependencies ---------------------------------------------------------
 c.link([(167, 60), (750, 60), (750, ICY-26)], "1. sign in &#183; authorization code + PKCE",
-       dashed=True, color=GREY, lx=430, ly=54)
+       dashed=True, color=GRAY, lx=430, ly=54)
 c.link([(750, 306), (750, 370), (250, 370), (250, APP_Y+86), (354, APP_Y+86)],
-       "2. JWKS &#183; RS256, token_use, client_id", dashed=True, color=GREY, lx=500, ly=364)
-c.link([(960, 322), (960, 700), (1071, 700)], "task role", dashed=True, color=GREY,
+       "2. JWKS &#183; RS256, token_use, client_id", dashed=True, color=GRAY, lx=500, ly=364)
+c.link([(960, 322), (960, 700), (1071, 700)], "task role", dashed=True, color=GRAY,
        lx=960, ly=366)
 c.link([(1160, 296), (1160, 600), (1290, 600), (1290, EY-6)], "image pull",
-       dashed=True, color=GREY, lx=1160, ly=366)
-c.link([(1315, 296), (1315, EY-6)], "credentials", dashed=True, color=GREY, lx=1315, ly=366)
-c.link([(EX, EY+61), (1150, EY+61)], "private path", dashed=True, color=GREY,
+       dashed=True, color=GRAY, lx=1160, ly=366)
+c.link([(1315, 296), (1315, EY-6)], "credentials", dashed=True, color=GRAY, lx=1315, ly=366)
+c.link([(EX, EY+61), (1150, EY+61)], "private path", dashed=True, color=GRAY,
        lx=1198, ly=EY+55)
 c.link([(405, APP_Y+70), (430, APP_Y+70), (430, PUB_Y+110)], "egress only",
-       dashed=True, color=GREY, lx=478, ly=APP_Y+30)
-c.link([(407, PUB_Y+82), (223, PUB_Y+82)], dashed=True, color=GREY)
+       dashed=True, color=GRAY, lx=478, ly=APP_Y+30)
+c.link([(407, PUB_Y+82), (223, PUB_Y+82)], dashed=True, color=GRAY)
 c.link([(580, ICY-26), (580, 142), (300, 142), (300, ICY-26)], "inspects",
-       dashed=True, color=GREY, lx=440, ly=136)
+       dashed=True, color=GRAY, lx=440, ly=136)
 
 c.text(830, 1234, "Defaults shown. WAF, GuardDuty, RDS Multi-AZ and the VPC endpoints are "
                   "variables; the sandbox this was deployed into forbids several of them.",
-       11, "400", GREY, "middle", italic=True)
+       11, "400", GRAY, "middle", italic=True)
 
 print(c.render(sys.argv[1]))

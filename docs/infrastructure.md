@@ -83,15 +83,15 @@ creating a dependency cycle.
 
 **Role.** The single public entry point. It serves the React bundle from a
 private S3 origin using Origin Access Control, and routes `/api/*` to the ALB
-origin through a path-based cache behaviour.
+origin through a path-based cache behavior.
 
 **Two details that matter more than they look.**
 
-The API behaviour forwards the `Authorization` header. Without it the bearer
+The API behavior forwards the `Authorization` header. Without it the bearer
 token never reaches the API and every request is rejected. Including it in the
 cache key also keeps one user's responses out of another's cache.
 
-The API behaviour pins `min_ttl`, `default_ttl` and `max_ttl` to `0`. CloudFront
+The API behavior pins `min_ttl`, `default_ttl` and `max_ttl` to `0`. CloudFront
 otherwise applies a 24-hour default TTL, which would serve stale account
 balances and, worse, keep serving a user's data from the edge after they
 signed out.
@@ -121,7 +121,7 @@ Standard for volumetric protection.
 **Status.** Implemented in `modules/cognito`.
 
 **Role.** A user pool handles sign-up, sign-in, password reset and MFA
-enrolment through the hosted UI, and issues JWTs. The frontend attaches the
+enrollment through the hosted UI, and issues JWTs. The frontend attaches the
 access token to API calls; ECS tasks verify it against the pool's JWKS endpoint
 on every request.
 
@@ -146,7 +146,7 @@ adaptive authentication are a paid Cognito tier billed per monthly active user.
 The variable exists and `ENFORCED` is the correct setting for anything holding
 real data; `OFF` is the honest default for a portfolio environment.
 
-**Why Cognito.** It removes password hashing, session storage, MFA enrolment,
+**Why Cognito.** It removes password hashing, session storage, MFA enrollment,
 token rotation and account recovery from the codebase, and the hosted UI removes
 the need to implement the SRP flow in the frontend.
 
@@ -244,7 +244,7 @@ provides.
 **Why Fargate rather than EC2 with an Auto Scaling Group.** This is a real
 trade, and the honest reasoning is:
 
-- There is no host layer to patch, harden or replace. On EC2 the ECS-optimised
+- There is no host layer to patch, harden or replace. On EC2 the ECS-optimized
   AMI is the team's responsibility to keep current; that is a standing
   operational cost for a two-task workload.
 - Billing is per-task, not per-instance. An EC2 cluster sized for two small
@@ -338,7 +338,7 @@ Credentials stay out of source control, out of container images, and out of
 
 **Status.** Implemented in `app/internal/ai`, with IAM in `modules/ecs`.
 
-**Role.** Claude on Bedrock powers three features: transaction categorisation,
+**Role.** Claude on Bedrock powers three features: transaction categorization,
 anomaly assessment, and spending insight generation.
 
 **How credentials work.** The application uses the Anthropic SDK's Bedrock
@@ -355,17 +355,17 @@ is actually configured for Bedrock.
 implementations: `Bedrock`, and a deterministic local `Stub` that uses keyword
 matching and arithmetic. The application never branches on which is in use. This
 means the AI surfaces are fully functional with no AWS account and no inference
-spend, and it makes the behaviour testable without mocking a network service.
+spend, and it makes the behavior testable without mocking a network service.
 The provider that produced each result is recorded on the row, so stub output is
 never mistaken for real inference.
 
 `AI_PROVIDER` defaults to `stub`, so a misconfiguration cannot silently start
 billing.
 
-**Data minimisation.** Insight generation sends **only aggregated category
+**Data minimization.** Insight generation sends **only aggregated category
 totals**, never individual transaction descriptions, account names, or
 identifiers. Anomaly detection sends per-category aggregates as the baseline
-rather than the rows themselves. The categorisation path is the only one that
+rather than the rows themselves. The categorization path is the only one that
 sends a raw description, and it sends exactly one, truncated to 200 characters.
 
 ---
@@ -399,7 +399,7 @@ no way to reconstruct who did what. It is also GuardDuty's primary input.
 
 ### Amazon GuardDuty
 
-Analyses CloudTrail events, VPC Flow Logs and DNS query logs for credential
+Analyzes CloudTrail events, VPC Flow Logs and DNS query logs for credential
 exfiltration, cryptomining, and communication with known-malicious hosts.
 
 **Findings are routed, not just recorded.** An EventBridge rule matches findings
@@ -442,7 +442,7 @@ up. Destroying one cannot touch the other because neither has a record of it.
 
 The event carries six fields and deliberately excludes the transaction
 description, the account ID, and the owning user, which is the same
-data-minimisation posture as the Bedrock integration.
+data-minimization posture as the Bedrock integration.
 
 Full detail is in `data-pipeline.md`: schema, cost table, lifecycle rules, query
 examples, and the Glue job's `SystemExit` gotcha.
@@ -451,7 +451,7 @@ examples, and the Glue job's `SystemExit` gotcha.
 
 ## Security Model
 
-Defence in depth: no single control is trusted on its own.
+Defense in depth: no single control is trusted on its own.
 
 ### Network Isolation
 
@@ -502,7 +502,7 @@ to someone else returns **404, not 403**, because a 403 confirms the ID exists.
 Transaction descriptions are user-controlled text that ends up inside a model
 prompt, which puts prompt injection in scope.
 
-The defence is **not** the wording of the system prompt. It is that model output
+The defense is **not** the wording of the system prompt. It is that model output
 is never trusted:
 
 - Categories are constrained by a JSON schema whose `category` field is an enum,
@@ -532,7 +532,7 @@ the weakest link in the current default configuration, and it closes the moment
 ### Application Hardening
 
 Request bodies are capped at 1 MiB and reject unknown fields, so a client
-sending `user_id` gets an error rather than the impression the server honoured
+sending `user_id` gets an error rather than the impression the server honored
 it. Amounts are rejected if not finite. Responses carry `nosniff`, `DENY`
 framing, `no-referrer`, `no-store` and HSTS. A per-identity rate limiter caps
 the model-backed endpoints, which is the dimension that maps to spend. WAF's
@@ -556,7 +556,7 @@ half a document.
   are enabled; full request logging is additional cost for little added value
   at this traffic level.
 - **ALB access logs.** Same reasoning; CloudWatch metrics cover the ALB's
-  behaviour.
+  behavior.
 - **A backend-for-frontend holding tokens in httpOnly cookies.** The frontend
   stores its access token in `sessionStorage`, which is readable by any script
   on the page. This is the most significant known weakness in the stack and is

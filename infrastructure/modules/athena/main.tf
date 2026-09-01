@@ -71,7 +71,7 @@ resource "aws_athena_workgroup" "analytics" {
     # enforced.
     enforce_workgroup_configuration = true
 
-    # The guardrail. A query projected to scan more than this is cancelled
+    # The guardrail. A query projected to scan more than this is canceled
     # before it runs, so the ceiling on a single mistake is bounded rather
     # than open-ended.
     bytes_scanned_cutoff_per_query = var.scan_cutoff_bytes

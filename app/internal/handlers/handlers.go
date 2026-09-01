@@ -32,7 +32,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody))
 	// Reject unknown fields so a client silently sending `user_id` or
 	// `anomaly_severity` gets an error rather than the quiet impression that
-	// the server honoured it.
+	// the server honored it.
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(dst); err != nil {
@@ -46,7 +46,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 //
 // A missing value means the route was mounted without the auth middleware --
 // a wiring bug. It fails closed with a 500 rather than falling back to
-// unscoped behaviour, which would silently expose every user's data.
+// unscoped behavior, which would silently expose every user's data.
 func currentUser(w http.ResponseWriter, r *http.Request) (string, bool) {
 	claims, ok := auth.ClaimsFrom(r.Context())
 	if !ok || claims.Subject == "" {

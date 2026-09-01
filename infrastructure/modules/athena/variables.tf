@@ -4,7 +4,7 @@ variable "project_name" {
 }
 
 variable "scan_cutoff_bytes" {
-  description = "Per-query scan ceiling. A query projected to exceed it is cancelled before it runs. 1 GiB against a 5-USD-per-TB rate caps a single query at roughly half a cent."
+  description = "Per-query scan ceiling. A query projected to exceed it is canceled before it runs. 1 GiB against a 5-USD-per-TB rate caps a single query at roughly half a cent."
   type        = number
   default     = 1073741824
 }

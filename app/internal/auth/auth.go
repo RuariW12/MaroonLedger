@@ -152,7 +152,7 @@ func unauthorized(w http.ResponseWriter) {
 //
 // The boolean is false only when called from a handler that was not wrapped in
 // Middleware -- a wiring bug, not a runtime condition. Handlers should treat it
-// as a 500 rather than falling back to unscoped behaviour.
+// as a 500 rather than falling back to unscoped behavior.
 func ClaimsFrom(ctx context.Context) (*Claims, bool) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	return claims, ok

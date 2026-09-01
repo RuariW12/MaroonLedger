@@ -56,7 +56,7 @@ resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   default_root_object = "index.html"
   # Null rather than absent when disabled: CloudFront simply has no web ACL
-  # attached, and every other behaviour of the distribution is unchanged.
+  # attached, and every other behavior of the distribution is unchanged.
   web_acl_id = var.enable_waf ? aws_wafv2_web_acl.main[0].arn : null
 
   origin {

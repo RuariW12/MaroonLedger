@@ -1,7 +1,7 @@
 import { useState, useMemo, useId } from 'react';
 
 // Charts are hand-built SVG rather than a charting library for one specific
-// reason: every colour here is a CSS custom property, so light/dark theming is
+// reason: every color here is a CSS custom property, so light/dark theming is
 // a variable swap with no re-render and no JS reading computed styles.
 
 export function money(value, { compact = false, sign = false } = {}) {
@@ -203,7 +203,7 @@ export function BalanceArea({ series, height = 260 }) {
               strokeDasharray="3 3"
               vectorEffect="non-scaling-stroke"
             />
-            {/* A surface-coloured ring keeps the marker legible wherever it
+            {/* A surface-colored ring keeps the marker legible wherever it
                 lands on the filled area. */}
             <circle
               cx={geom.x(hover.index)}
@@ -237,7 +237,7 @@ export function BalanceArea({ series, height = 260 }) {
 
 // Fixed category-to-slot assignment.
 //
-// Colour follows the category, never its position in the sorted list -- so
+// Color follows the category, never its position in the sorted list -- so
 // filtering or a change in ranking never repaints the survivors. Eight
 // categories get a validated hue; everything else, including the "Other"
 // rollup, is deliberately neutral so a minor category can never impersonate a
@@ -276,7 +276,7 @@ export function categoryColor(category) {
  *
  * Ranked bars read magnitude far more accurately than a pie. Identity is
  * carried by the row label first and the hue second: the label is what makes
- * the chart legible without colour at all, which is also what satisfies the
+ * the chart legible without color at all, which is also what satisfies the
  * relief rule for the two light-mode hues that sit below 3:1 on white.
  */
 export function CategoryBars({ categories, limit = 6 }) {
@@ -292,7 +292,7 @@ export function CategoryBars({ categories, limit = 6 }) {
     if (spend.length <= limit) return spend;
 
     // Past the cap, the tail folds into a single "Other" row rather than
-    // sprouting new categories that would each need their own colour.
+    // sprouting new categories that would each need their own color.
     const head = spend.slice(0, limit);
     const tail = spend.slice(limit);
     return [

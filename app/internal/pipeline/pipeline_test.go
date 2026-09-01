@@ -35,7 +35,7 @@ func TestEventSchema(t *testing.T) {
 		}
 	}
 
-	// Data minimisation is a property of the type, not of the caller. If a
+	// Data minimization is a property of the type, not of the caller. If a
 	// description or account field ever appears here, every row already
 	// written to the lake carries it.
 	for _, forbidden := range []string{"description", "account_id", "account", "user_id", "anomaly_reason"} {
@@ -49,7 +49,7 @@ func TestEventSchema(t *testing.T) {
 	}
 }
 
-// Optional fields are omitted rather than serialised as empty strings, so an
+// Optional fields are omitted rather than serialized as empty strings, so an
 // unenriched transaction does not create a bogus "" category in Athena.
 func TestEventOmitsUnsetOptionalFields(t *testing.T) {
 	data, err := json.Marshal(Event{ID: 1, Amount: -5, Category: "other"})

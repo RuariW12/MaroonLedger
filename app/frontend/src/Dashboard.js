@@ -94,8 +94,8 @@ function Dashboard({ onSelectAccount }) {
           foot={
             series.length > 1 && (
               <span className={`delta ${change >= 0 ? 'value-pos' : 'value-neg'}`}>
-                {/* The arrow carries direction as well as the colour, so the
-                    meaning survives for a colour-blind reader. */}
+                {/* The arrow carries direction as well as the color, so the
+                    meaning survives for a color-blind reader. */}
                 {change >= 0 ? '↑' : '↓'} {money(Math.abs(change), { compact: true })}
                 {first !== 0 && ` (${Math.abs(changePct).toFixed(1)}%)`}
               </span>
@@ -320,7 +320,7 @@ function Dashboard({ onSelectAccount }) {
                   <div className="row-main">
                     <div className="row-title">{a.description || 'Transaction'}</div>
                     <div className="row-meta">
-                      {/* The word sits beside the colour, so severity is never
+                      {/* The word sits beside the color, so severity is never
                           communicated by hue alone. */}
                       <span className={`chip chip-${a.severity}`}>{a.severity}</span>
                       <span>{a.account_name}</span>
@@ -339,7 +339,7 @@ function Dashboard({ onSelectAccount }) {
 }
 
 
-// Colour follows the account's own direction of travel, not its rank in the
+// Color follows the account's own direction of travel, not its rank in the
 // list, so adding an account never repaints the others.
 function trendColor(values) {
   if (!values || values.length < 2) return 'var(--text-3)';

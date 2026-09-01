@@ -43,18 +43,18 @@ c.link([(1086, IY), (1344, IY)])
 c.link([(760, QY-26), (760, 344), (1060, 344), (1060, IY+30)],
        "nightly 03:00 UTC", lx=910, ly=338)
 # Athena reads data from the curated prefix and its table shape from the catalog.
-c.link([(1370, 290), (1370, 392), (1400, 392), (1400, QY-26)], dashed=True, color=GREY)
-c.text(1430, 372, "Parquet, partition-pruned", 10.5, "400", GREY)
-c.link([(1123, QY), (1377, QY)], dashed=True, color=GREY)
+c.link([(1370, 290), (1370, 392), (1400, 392), (1400, QY-26)], dashed=True, color=GRAY)
+c.text(1430, 372, "Parquet, partition-pruned", 10.5, "400", GRAY)
+c.link([(1123, QY), (1377, QY)], dashed=True, color=GRAY)
 
 c.frame(410, 300, 300, 116, "Not emitted", "#B0084D", fill="#FFF1F5", opacity=0.7)
-c.text(430, 340, "description &#183; account id &#183; user id", 11, "400", GREY)
-c.text(430, 358, "anomaly reason", 11, "400", GREY)
+c.text(430, 340, "description &#183; account id &#183; user id", 11, "400", GRAY)
+c.text(430, 358, "anomaly reason", 11, "400", GRAY)
 c.text(430, 384, "six fields only, asserted by a test", 10.5, "600", "#B0084D")
 
 c.text(830, 700, "Off by default. With DATA_PIPELINE=off the application builds a no-op emitter, "
-                 "makes no AWS calls and costs nothing.", 11.5, "400", GREY, "middle", italic=True)
+                 "makes no AWS calls and costs nothing.", 11.5, "400", GRAY, "middle", italic=True)
 c.text(830, 722, "Destroying the compute stack leaves everything here untouched, and Athena keeps "
-                 "answering while the application is down.", 11.5, "400", GREY, "middle", italic=True)
+                 "answering while the application is down.", 11.5, "400", GRAY, "middle", italic=True)
 
 print(c.render(sys.argv[1]))

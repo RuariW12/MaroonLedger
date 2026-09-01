@@ -115,7 +115,7 @@ function AccountDetail({ account, onBack }) {
                   <input
                     id="tx-category"
                     className="input"
-                    placeholder="Leave blank to categorise automatically"
+                    placeholder="Leave blank to categorize automatically"
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                   />
@@ -178,7 +178,7 @@ function AccountDetail({ account, onBack }) {
                     <span
                       className="chip chip-auto"
                       style={{ marginLeft: 8 }}
-                      title={`Categorised by ${t.ai_provider || 'AI'}`}
+                      title={`Categorized by ${t.ai_provider || 'AI'}`}
                     >
                       auto
                     </span>

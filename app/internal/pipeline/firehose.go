@@ -149,7 +149,7 @@ func (e *FirehoseEmitter) run(flushEvery time.Duration) {
 			return
 		}
 		// A fresh context per flush: the worker outlives any single request,
-		// and a flush must not inherit a cancelled request's deadline.
+		// and a flush must not inherit a canceled request's deadline.
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		e.deliver(ctx, pending)
 		cancel()

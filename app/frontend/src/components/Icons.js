@@ -1,5 +1,5 @@
 // Inline stroke icons. `currentColor` is what lets them follow the rail's text
-// colour through hover, active and both themes without a second asset.
+// color through hover, active and both themes without a second asset.
 
 const base = {
   fill: 'none',

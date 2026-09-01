@@ -16,7 +16,7 @@ type InsightsHandler struct {
 	AI ai.Provider
 }
 
-// defaultInsightWindow is the period analysed when the caller does not specify
+// defaultInsightWindow is the period analyzed when the caller does not specify
 // one.
 const defaultInsightWindow = 90 * 24 * time.Hour
 
@@ -32,7 +32,7 @@ type insightsResponse struct {
 	ByCategory      []categoryBucket `json:"by_category"`
 }
 
-// Generate analyses the authenticated user's spending over a period.
+// Generate analyzes the authenticated user's spending over a period.
 //
 // Only aggregates leave the database for the model: category totals and counts,
 // never descriptions, account names, or ids. That keeps the data sent to
@@ -67,10 +67,10 @@ func (h *InsightsHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary, breakout, err := h.summarise(r, userID, start, end)
+	summary, breakout, err := h.summarize(r, userID, start, end)
 	if err != nil {
-		http.Error(w, "Failed to summarise spending", http.StatusInternalServerError)
-		log.Printf("Error summarising spending: %v", err)
+		http.Error(w, "Failed to summarize spending", http.StatusInternalServerError)
+		log.Printf("Error summarizing spending: %v", err)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *InsightsHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *InsightsHandler) summarise(r *http.Request, userID string, start, end time.Time) (ai.SpendingSummary, []categoryBucket, error) {
+func (h *InsightsHandler) summarize(r *http.Request, userID string, start, end time.Time) (ai.SpendingSummary, []categoryBucket, error) {
 	breakout, err := categoryOutflow(r.Context(), h.DB, userID, start, end)
 	if err != nil {
 		return ai.SpendingSummary{}, nil, err

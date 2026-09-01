@@ -19,7 +19,7 @@ GREEN    = "#7AA116"   # VPC and public subnets
 TEAL     = "#00A4A6"   # availability zones, private subnets
 BLUE     = "#3B48CC"   # data tier
 ORANGE   = "#ED7100"   # compute accents
-GREY     = "#5A6B86"
+GRAY     = "#5A6B86"
 FONT = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
 
 _cache = {}
@@ -60,7 +60,7 @@ class Canvas:
 
     # ---- nodes ------------------------------------------------------------
     def node(self, cx, cy, icon, label, sub=None, size=46, above=False):
-        """Icon centred on (cx, cy) with label(s) underneath."""
+        """Icon centered on (cx, cy) with label(s) underneath."""
         self.fg.append(
             f'<image href="{icon_uri(icon)}" x="{cx-size/2}" y="{cy-size/2}" '
             f'width="{size}" height="{size}"/>')
@@ -73,7 +73,7 @@ class Canvas:
             for i, line in enumerate(subs):
                 self.fg.append(
                     f'<text x="{cx}" y="{ly+15+i*13}" font-family="{FONT}" '
-                    f'font-size="10.5" text-anchor="middle" fill="{GREY}">{line}</text>')
+                    f'font-size="10.5" text-anchor="middle" fill="{GRAY}">{line}</text>')
         else:
             self.fg.append(
                 f'<text x="{cx}" y="{cy+size/2+16}" font-family="{FONT}" font-size="12" '
@@ -81,7 +81,7 @@ class Canvas:
             for i, line in enumerate(subs):
                 self.fg.append(
                     f'<text x="{cx}" y="{cy+size/2+31+i*13}" font-family="{FONT}" '
-                    f'font-size="10.5" text-anchor="middle" fill="{GREY}">{line}</text>')
+                    f'font-size="10.5" text-anchor="middle" fill="{GRAY}">{line}</text>')
 
     def text(self, x, y, s, size=12, weight="400", fill=INK, anchor="start", italic=False):
         st = ' font-style="italic"' if italic else ''
@@ -112,7 +112,7 @@ class Canvas:
                 f'fill="#FFFFFF" fill-opacity="0.94"/>')
             self.mid.append(
                 f'<text x="{lx}" y="{ly}" font-family="{FONT}" font-size="10.5" '
-                f'text-anchor="{label_anchor}" fill="{GREY}">{label}</text>')
+                f'text-anchor="{label_anchor}" fill="{GRAY}">{label}</text>')
 
     def render(self, path):
         svg = f'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{self.w}" height="{self.h}" viewBox="0 0 {self.w} {self.h}">
@@ -121,7 +121,7 @@ class Canvas:
   <path d="M 0 0 L 10 5 L 0 10 z" fill="{INK}"/>
 </marker>
 <marker id="arrowlight" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-  <path d="M 0 0 L 10 5 L 0 10 z" fill="{GREY}"/>
+  <path d="M 0 0 L 10 5 L 0 10 z" fill="{GRAY}"/>
 </marker>
 </defs>
 <rect width="{self.w}" height="{self.h}" fill="#FFFFFF"/>

@@ -6,7 +6,7 @@
 #
 # There is no DynamoDB lock table. Terraform 1.10 added native S3 state
 # locking via a lock file held in the same bucket, and `dynamodb_table` on the
-# S3 backend is deprecated in favour of it. Dropping the table removes a
+# S3 backend is deprecated in favor of it. Dropping the table removes a
 # resource, a module dependency, and the IAM surface that went with it.
 
 module "s3_bucket" {

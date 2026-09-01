@@ -43,18 +43,18 @@ func main() {
 		ClientID: mustEnv("AUTH_CLIENT_ID"),
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialise authentication: %v", err)
+		log.Fatalf("Failed to initialize authentication: %v", err)
 	}
 
 	provider, err := buildAIProvider(ctx)
 	if err != nil {
-		log.Fatalf("Failed to initialise AI provider: %v", err)
+		log.Fatalf("Failed to initialize AI provider: %v", err)
 	}
 	log.Printf("AI provider: %s", provider.Name())
 
 	emitter, err := buildEmitter(ctx)
 	if err != nil {
-		log.Fatalf("Failed to initialise data pipeline: %v", err)
+		log.Fatalf("Failed to initialize data pipeline: %v", err)
 	}
 	log.Printf("Data pipeline: %s", emitter.Name())
 
@@ -171,7 +171,7 @@ func buildEmitter(ctx context.Context) (pipeline.Emitter, error) {
 	}
 }
 
-// securityHeaders applies defence-in-depth response headers.
+// securityHeaders applies defense-in-depth response headers.
 //
 // CloudFront terminates TLS and serves the frontend, so the headers that matter
 // for the HTML document belong there. These cover the API's own responses.

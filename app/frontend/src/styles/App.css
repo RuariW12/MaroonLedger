@@ -14,13 +14,13 @@
    [data-theme="dark"] so an explicit choice beats the OS in both directions.
    The :not() guard is what lets a light stamp win against OS-dark.
 
-   The shell is neutral grey in both modes; maroon appears only where it means
+   The shell is neutral gray in both modes; maroon appears only where it means
    something -- the mark, the active nav item, primary actions, and the data
-   itself. That is the difference between a brand colour and a background.
+   itself. That is the difference between a brand color and a background.
 
    The series ramp is not decorative. Both modes were checked with the
    data-viz validator against their own surface (#ffffff / #15171a): lightness
-   band, chroma floor, colour-blind separation, normal-vision separation and
+   band, chroma floor, color-blind separation, normal-vision separation and
    contrast all pass. Dark is the same hues re-stepped for the dark surface,
    not an automatic lightening of the light values.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -52,7 +52,7 @@
   --brand-hover: #7d1526;
   --brand-soft: rgba(152, 25, 46, 0.09);
 
-  /* Fixed hue order. The ordering is the colour-blind-safety mechanism, not a
+  /* Fixed hue order. The ordering is the color-blind-safety mechanism, not a
      preference: candidate orders were run through the validator and only ones
      clearing every adjacent gate in BOTH modes kept. Orange next to green, and
      magenta next to orange, both fail -- hence this sequence. */
@@ -71,7 +71,7 @@
   --pos: #087a3f;
   --neg: #a8253c;
 
-  /* Status steps are reserved -- never reused as a series colour, and always
+  /* Status steps are reserved -- never reused as a series color, and always
      shipped with a label rather than carrying meaning through hue alone. */
   --warning: #b07500;
   --warning-soft: rgba(250, 178, 25, 0.16);
@@ -624,8 +624,8 @@ select {
   color: var(--neg);
 }
 
-/* Direction is carried by an arrow glyph as well as colour, so the meaning
-   survives for a colour-blind reader and in greyscale print. */
+/* Direction is carried by an arrow glyph as well as color, so the meaning
+   survives for a color-blind reader and in grayscale print. */
 .delta {
   display: inline-flex;
   align-items: center;
@@ -692,7 +692,7 @@ select {
 }
 
 /* Ranked magnitude bars. Category identity lives in the row label, so the bars
-   are one hue -- colouring twelve categories would need twelve hues no reader
+   are one hue -- coloring twelve categories would need twelve hues no reader
    could tell apart. */
 .bar-row {
   display: grid;
@@ -835,7 +835,7 @@ select {
   color: var(--text-3);
 }
 
-/* Severity chips pair colour with the word itself, so the level is never
+/* Severity chips pair color with the word itself, so the level is never
    communicated by hue alone. */
 .chip-medium {
   background: var(--warning-soft);

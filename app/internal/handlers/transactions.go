@@ -278,7 +278,7 @@ func (h *TransactionHandler) enrich(ctx context.Context, accountID int, accountT
 	return out
 }
 
-// baselineFor summarises an account's history by category. Aggregates are used
+// baselineFor summarizes an account's history by category. Aggregates are used
 // rather than raw rows so descriptions are never re-sent to the model.
 func (h *TransactionHandler) baselineFor(ctx context.Context, accountID int) ([]ai.HistoricalStat, error) {
 	rows, err := h.DB.QueryContext(ctx, `

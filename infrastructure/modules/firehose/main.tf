@@ -51,7 +51,7 @@ resource "aws_kinesis_firehose_delivery_stream" "transactions" {
   # Firehose encrypts in transit to S3 and the bucket applies SSE-S3 at rest.
   # Server-side encryption on the stream itself is for Direct PUT payloads at
   # rest inside Firehose and requires KMS, which reintroduces per-request cost
-  # for data that is already minimised.
+  # for data that is already minimized.
 
   tags = {
     Terraform   = "true"

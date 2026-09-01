@@ -41,7 +41,7 @@ function Insights() {
             </div>
           </div>
           <button className="btn btn-primary" onClick={run} disabled={loading}>
-            {loading ? 'Analysing…' : data ? 'Refresh analysis' : 'Analyse my spending'}
+            {loading ? 'Analyzing…' : data ? 'Refresh analysis' : 'Analyze my spending'}
           </button>
         </div>
 
@@ -97,7 +97,7 @@ function Insights() {
               >
                 {/* Naming the provider keeps deterministic stub output from
                     being mistaken for real model inference. */}
-                <span className="provider-tag">analysed by {data.provider}</span>
+                <span className="provider-tag">analyzed by {data.provider}</span>
                 <span className="provider-tag">
                   in {money(data.total_inflow, { compact: true })} · out{' '}
                   {money(data.total_outflow, { compact: true })}

@@ -37,7 +37,7 @@ var categoryKeywords = []struct {
 	{CategoryHousing, []string{"rent", "mortgage", "landlord", "letting", "property"}},
 	{CategoryUtilities, []string{"electric", "water", "gas bill", "internet", "broadband", "phone", "mobile", "utility", "council tax"}},
 	{CategoryHealthcare, []string{"pharmacy", "doctor", "dental", "clinic", "hospital", "health", "optician"}},
-	{CategoryEntertainment, []string{"netflix", "spotify", "cinema", "theatre", "concert", "game", "steam", "disney", "hulu", "gym"}},
+	{CategoryEntertainment, []string{"netflix", "spotify", "cinema", "theater", "theatre", "concert", "game", "steam", "disney", "hulu", "gym"}},
 	{CategoryShopping, []string{"amazon", "ebay", "store", "shop", "clothing", "zara", "h&m", "nike", "apple store"}},
 	{CategoryIncome, []string{"salary", "payroll", "wages", "deposit", "refund", "dividend", "interest paid"}},
 	{CategoryTransfer, []string{"transfer", "zelle", "venmo", "paypal", "wire", "internal"}},
@@ -217,7 +217,7 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*Insights, error) {
 	if len(summary.ByCategory) == 0 {
 		return &Insights{
-			Summary:      "No spending was recorded in this period, so there is nothing to analyse yet.",
+			Summary:      "No spending was recorded in this period, so there is nothing to analyze yet.",
 			Observations: []string{"No transactions fall within the selected period."},
 			Recommendations: []string{
 				"Add transactions to your accounts to start building a spending picture.",

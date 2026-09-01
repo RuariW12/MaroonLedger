@@ -38,7 +38,7 @@ needed, no cost. Enabling it is explicit, the same posture as the AI provider.
               ▼
    ┌──────────────────────┐
    │  Glue PySpark ETL    │   2 × G.1X · 15 min timeout · bookmarks on
-   │  transactions_etl.py │   dedupes by id, normalises, repartitions
+   │  transactions_etl.py │   dedupes by id, normalizes, repartitions
    └──────────┬───────────┘
               │
               ▼
@@ -70,7 +70,7 @@ One event per committed transaction. The emitter sends only these fields:
 | `anomaly_severity` | `string` | `none` / `low` / `medium` / `high`, or omitted |
 
 What is deliberately not emitted: the free-text `description`, the account ID,
-the owning user, and `anomaly_reason`. This is the same data-minimisation
+the owning user, and `anomaly_reason`. This is the same data-minimization
 posture as the Bedrock integration. The analytics layer needs shape and
 magnitude, not the merchant name or who spent it.
 

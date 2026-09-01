@@ -18,7 +18,7 @@ WHERE category NOT IN (
     'entertainment', 'shopping', 'income', 'transfer', 'fees', 'other'
 );
 
--- Normalise case and whitespace while we are here; the application lowercases
+-- Normalize case and whitespace while we are here; the application lowercases
 -- and trims on write, but older rows predate that.
 UPDATE transactions
 SET category = lower(btrim(category))

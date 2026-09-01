@@ -1,6 +1,6 @@
 """Fold the raw transaction landing zone into the curated Parquet dataset.
 
-Reads newline-delimited gzipped JSON from raw/, normalises it, and appends
+Reads newline-delimited gzipped JSON from raw/, normalizes it, and appends
 Snappy Parquet to curated/ partitioned by event_date and category.
 
 Job bookmarks are what make this safe to run on a schedule: Glue records which

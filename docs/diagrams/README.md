@@ -20,7 +20,7 @@ python3 -m venv .venv
 .venv/bin/python docs/diagrams/diagram_data.py docs/images/architecture-data-pipeline.svg
 ```
 
-Then rasterise. Any SVG renderer works; headless Chrome needs no extra install:
+Then rasterize. Any SVG renderer works; headless Chrome needs no extra install:
 
 ```bash
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \

@@ -1,7 +1,7 @@
 # MaroonLedger
 
 A personal finance application on AWS. Users sign in through Cognito, each
-person's data is scoped to their own identity, and Claude on Bedrock categorises
+person's data is scoped to their own identity, and Claude on Bedrock categorizes
 transactions, flags unusual ones, and writes a spending summary.
 
 ![Dashboard](docs/images/dashboard-overview.png)
@@ -11,7 +11,7 @@ transactions, flags unusual ones, and writes a spending summary.
 I started this in April 2026 to learn cloud engineering by building something
 real. The infrastructure came first: seven layers of Terraform modules covering
 network, data, compute, edge, identity and observability. The first
-`terraform apply` created 72 resources. A Go API went on top, containerised and
+`terraform apply` created 72 resources. A Go API went on top, containerized and
 deployed.
 
 I picked it up again in August expecting to polish the UI. Instead the first
@@ -95,7 +95,7 @@ schema constrains the model, but it is enforced on the far side of a network
 call, so the category is re-validated against a closed allowlist in Go. A real
 injection attempt in a description landed as category `other`.
 
-**Enrichment is best-effort.** Categorisation and anomaly detection run under a
+**Enrichment is best-effort.** Categorization and anomaly detection run under a
 deadline, and failures are logged and dropped rather than failing someone's
 write. Insights are the one place the model is a hard dependency, and that
 endpoint returns 503 rather than inventing a summary.
@@ -110,7 +110,7 @@ a network service. Every result records which provider produced it.
 
 **The dashboard and the insights page disagreed by $1,800.** The category query
 summed the signed amount per category, so any category with movement in both
-directions reported the difference. Three $600 transfers into savings cancelled
+directions reported the difference. Three $600 transfers into savings canceled
 most of a $2,400 outbound wire, so the category claimed $600 of spending while
 the anomaly panel flagged the $2,400 wire it had just erased. The fix already
 existed: the inflow and outflow function had been corrected earlier and carried a
@@ -199,8 +199,8 @@ Full walkthrough, schema, cost breakdown and query examples are in
 - Bedrock inference quota in the sandbox account used for deployment is zero for
   every Claude model in every region. The integration is real and exercised by
   `cmd/bedrockcheck`, but the screenshots above were produced by the stub. The
-  provider is recorded on every result, which is why the insights page reads
-  "analysed by stub".
+  provider is recorded on every result, so the insights page names the stub
+  rather than implying inference.
 - The access token is held in `sessionStorage`. A backend-for-frontend holding it
   in an httpOnly cookie is the real fix.
 - `GET /api/summary` has no rate limit. The endpoints that cost money do.

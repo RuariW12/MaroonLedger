@@ -41,7 +41,7 @@ func TestValidSeverityDefaultsToNone(t *testing.T) {
 		}
 	}
 
-	// Anything unrecognised must fail quiet, not loud: an unparseable answer
+	// Anything unrecognized must fail quiet, not loud: an unparseable answer
 	// should never manufacture an alert.
 	for _, input := range []string{"", "none", "critical", "HIGH", "severe", "1"} {
 		if got := ValidSeverity(input); got != SeverityNone {

@@ -6,7 +6,7 @@ type Account struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 	Type string `json:"type"`
-	// UserID is the owning identity's Cognito `sub`. It is never serialised:
+	// UserID is the owning identity's Cognito `sub`. It is never serialized:
 	// the client already knows who it is, and echoing it back only widens the
 	// surface for a scoping bug to become an information leak.
 	UserID    string    `json:"-"`

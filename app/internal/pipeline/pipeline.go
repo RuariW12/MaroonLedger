@@ -10,7 +10,7 @@
 // Deliberately not the whole transaction. The event carries the identifier, the
 // timestamp, the amount, the category, and the two AI-derived fields -- and
 // nothing else. The free-text description and the account it belongs to stay in
-// the database. That is the same data-minimisation posture the Bedrock
+// the database. That is the same data-minimization posture the Bedrock
 // integration takes: the analytics layer needs shape and magnitude, not the
 // merchant name, so sending it would widen exposure for no analytical gain.
 //

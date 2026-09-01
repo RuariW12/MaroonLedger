@@ -97,14 +97,14 @@ real. The API was open CRUD with no auth at all.
   logic testable without mocking a network service. Recorded which provider
   produced each result so stub output can never be mistaken for inference.
 - Thought about prompt injection properly for the first time. Transaction
-  descriptions are user-controlled text going into a prompt. The realisation
+  descriptions are user-controlled text going into a prompt. The realization
   that mattered: the system prompt wording is not the control. The control is
   that model output is re-validated against a closed allowlist in Go after it
   comes back. The JSON schema constrains the model, but it is enforced on the
   other side of a network call.
 - Verified with an actual injection attempt in a description. It landed as
   category `other`, which is exactly the intended containment.
-- Enrichment runs categorisation and anomaly detection concurrently under a
+- Enrichment runs categorization and anomaly detection concurrently under a
   15s deadline, and drops failures. Neither is worth failing a user's write.
 
 ## Day 10 - Frontend auth, and two bugs only a browser could find
@@ -138,7 +138,7 @@ rather than delete the claims.
   resolving the ALB's DNS name skipped it entirely. Restricted the SG to
   CloudFront's managed origin-facing prefix list. This was the most serious
   finding of the whole pass.
-- **CloudFront was caching API responses for 24 hours.** The `/api/*` behaviour
+- **CloudFront was caching API responses for 24 hours.** The `/api/*` behavior
   set no TTLs, so the default applied. Stale balances, and responses still
   served from the edge after sign-out. Pinned all three TTLs to 0.
 - Replaced the `random_password` + manual secret with an RDS-managed master
@@ -165,7 +165,7 @@ rather than delete the claims.
 - Added a "Deliberately Not Implemented" section to the infra doc. An
   architecture document that only lists what exists is half a document.
 
-## Day 12 - Containerising the frontend
+## Day 12 - Containerizing the frontend
 
 The frontend was still the odd one out: Postgres, the dev IdP and the API ran in
 compose, but the UI needed `npm install && npm start` on the host. Fixed that.
@@ -213,12 +213,12 @@ charts, card layout, and a proper light/dark theme.
   is deep maroon against a light page, which is the structure the references
   use to separate navigation from work.
 - Wrote the charts as hand-built inline SVG instead of pulling in Recharts. The
-  deciding reason was theming: every colour is a CSS variable, so light/dark is
+  deciding reason was theming: every color is a CSS variable, so light/dark is
   a token swap with no re-render and no JS reading computed styles. Also avoids
   ~100KB of dependency for three chart types.
 - Ran the series palette through the data-viz validator against both surfaces
   rather than eyeballing it. Passes the lightness band, chroma floor,
-  colour-blind separation, normal-vision separation, and contrast in both modes.
+  color-blind separation, normal-vision separation, and contrast in both modes.
 - Category bars are one hue, not twelve. Identity lives in the row label -
   twelve categories would need twelve hues nobody can tell apart, and would put
   identity in the least accessible channel available. Past six, the tail folds
@@ -244,9 +244,9 @@ assuming:
 - **Rent was flagged as anomalous every month.** The stub compared each amount
   against the account-wide average, and rent is 8-15x a typical purchase.
   Comparing within its own category makes it unremarkable. That required running
-  categorisation *before* anomaly detection instead of concurrently - the
+  categorization *before* anomaly detection instead of concurrently - the
   ordering is the fix, and the concurrency was what forced the wrong comparison.
-- I misread colours off screenshots twice (thought the rail wasn't theming, then
+- I misread colors off screenshots twice (thought the rail wasn't theming, then
   thought a negative savings rate was rendering green). Both times measuring
   `getComputedStyle` showed it was already correct. Lesson: read the computed
   value, don't eyeball a PNG.
@@ -263,15 +263,15 @@ assuming:
   the money columns.
 - Went from six hues to eight and used them on the category bars, which had
   been single-hue. Ordering matters more than the hues: orange next to green
-  fails colour-blind separation (ΔE 2.7) and magenta next to orange fails the
+  fails color-blind separation (ΔE 2.7) and magenta next to orange fails the
   normal-vision floor (11.6). Tested orderings until one cleared every adjacent
   gate in both modes - maroon, blue, orange, aqua, amber, magenta, violet,
   green.
-- Colour is keyed to the category name, never its rank in the sorted list, so
+- Color is keyed to the category name, never its rank in the sorted list, so
   filtering or a change in ranking never repaints the other bars. Eight
-  categories get a hue; the rest and the "Other" rollup are neutral grey. A
+  categories get a hue; the rest and the "Other" rollup are neutral gray. A
   ninth hue would have to be a repeat, and a repeat is worse than an honest
-  grey.
+  gray.
 - Added the gradient fade from the reference via `color-mix`, and gave the area
   fill a third gradient stop - two stops leave a visible hard edge on dark,
   where fill and card are close in luminance.
@@ -293,7 +293,7 @@ paint, no flash of unstyled text, nothing to break when a font CDN is
 unreachable, and no `fonts.googleapis.com` to allow in a CSP. Verified with the
 network log - zero font requests, zero `@font-face` faces registered.
 
-Also normalised font-weight 550/650 to 500/600. Those are variable-font weights;
+Also normalized font-weight 550/650 to 500/600. Those are variable-font weights;
 static system fallbacks round them unpredictably.
 
 ## Day 16 - The data pipeline
@@ -335,8 +335,8 @@ screenshots. Most of the day was spent on things the deploy surfaced.
   permitted.
 - Bedrock inference quota is 0.0 for every Claude model in every region here.
   The integration is real and `cmd/bedrockcheck` exercises it, but the demo runs
-  the stub. Every result records its provider, so the insights page says
-  "analysed by stub" instead of quietly implying inference.
+  the stub. Every result records its provider, so the insights page names the
+  stub instead of quietly implying inference.
 - Reported "INVOKABLE ✓" from a diagnostic whose catch-all case swallowed the
   actual error. Worth writing down: a diagnostic that can only print success is
   not a diagnostic.
@@ -345,7 +345,7 @@ screenshots. Most of the day was spent on things the deploy surfaced.
 insights page said $9,012, and the category bars summed to the smaller one. The
 category query summed the *signed* amount per category, so anything with
 movement in both directions reported the difference. Three $600 transfers into
-savings cancelled most of a $2,400 outbound wire; the transfer category claimed
+savings canceled most of a $2,400 outbound wire; the transfer category claimed
 $600 of spending while the anomaly panel a few inches away flagged the $2,400
 wire it had just erased. Every category percentage was inflated to match.
 

@@ -136,14 +136,14 @@ func (h *SummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	resp.ByCategory, err = categoryOutflow(r.Context(), h.DB, userID, start, end)
 	if err != nil {
-		http.Error(w, "Failed to summarise categories", http.StatusInternalServerError)
+		http.Error(w, "Failed to summarize categories", http.StatusInternalServerError)
 		log.Printf("summary: categories: %v", err)
 		return
 	}
 
 	resp.TotalInflow, resp.TotalOutflow, err = cashflow(r.Context(), h.DB, userID, start, end)
 	if err != nil {
-		http.Error(w, "Failed to summarise cash flow", http.StatusInternalServerError)
+		http.Error(w, "Failed to summarize cash flow", http.StatusInternalServerError)
 		log.Printf("summary: cashflow: %v", err)
 		return
 	}
