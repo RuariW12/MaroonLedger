@@ -60,8 +60,8 @@ type anomalyHeadline struct {
 
 // Get returns everything the dashboard renders in a single round trip.
 //
-// The alternative — the browser fetching accounts, then each account's
-// transactions, then deriving series client-side — is one request per account
+// The alternative (the browser fetching accounts, then each account's
+// transactions, then deriving series client-side) is one request per account
 // and puts the balance arithmetic in the least testable place. The aggregation
 // belongs next to the data.
 func (h *SummaryHandler) Get(w http.ResponseWriter, r *http.Request) {

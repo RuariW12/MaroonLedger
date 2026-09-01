@@ -306,7 +306,7 @@ to an S3 lake, a nightly Glue PySpark job producing Parquet, Athena on top.
   between demos; the lake costs nothing idle and should survive that. Two stacks
   with no `terraform_remote_state` between them is what makes `terraform
   destroy` safe. I wire the outputs across by hand, which feels clumsy and is
-  the entire point — coupling them would defeat the separation.
+  the entire point. Coupling them would defeat the separation.
 - Firehose rather than Kinesis Data Streams. Data Streams bills per shard-hour
   whether or not anything is written, about $11/month as a floor. Direct PUT has
   no floor at all.
@@ -328,7 +328,7 @@ screenshots. Most of the day was spent on things the deploy surfaced.
 
 - The account is a vended sandbox with SCPs above IAM: EC2 pinned to us-east-2,
   Firehose denied org-wide, GuardDuty denied, WAF denied at CloudFront scope.
-  AdministratorAccess doesn't help — an SCP sits above IAM and can't be
+  AdministratorAccess doesn't help, because an SCP sits above IAM and can't be
   overridden from inside. Turned each into a Terraform variable defaulting to
   the production-correct value and overrode them in gitignored tfvars, so the
   repo describes the architecture I'd deploy rather than the one this account
@@ -360,7 +360,7 @@ Fixed by aggregating outflows only, so income drops out in SQL instead of being
 filtered by every consumer, and collapsing the three copies into one function.
 Verified against a throwaway Postgres: the old query returns transfer −600
 across 4 rows and lets income in, the new one returns 2400 across 1 row and
-doesn't. No unit test could have caught this — it was found by two numbers on
+doesn't. No unit test could have caught this. It was found by two numbers on
 screen disagreeing.
 
 **A plain `docker build` shipped the wrong binary.** The Dockerfile builds the
@@ -368,7 +368,7 @@ API server and the dev identity provider. `docker build .` with no `--target`
 builds whichever stage is *last*, and devidp was last. The comment at the top of
 the file asserted the opposite. I pushed that image to ECR and the service sat
 at 1/2 for ten minutes while ECS killed task after task for failing health
-checks — the dev IdP listens on 9000 and the target group probes 3000, so it
+checks. The dev IdP listens on 9000 and the target group probes 3000, so it
 never passed and never received traffic.
 
 That port mismatch is the only reason this was loud. Had they agreed, a public
@@ -378,7 +378,7 @@ target is now the safe one.
 
 - Also fixed the anomaly reason text. When a category has no history the score
   falls back to an account-wide baseline, but the message still named the
-  category — "11.3x the usual for housing" on the first rent payment, when
+  category, reporting "11.3x the usual for housing" on the first rent payment when
   housing had no history at all to be usual about. The message now names the
   baseline it actually used. Added a test for both branches.
 - Rewrote the README around the story rather than the feature list, and split

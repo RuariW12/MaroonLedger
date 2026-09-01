@@ -64,7 +64,7 @@ function Login({ onSignedIn, theme, onToggleTheme }) {
                 required
               />
               <span className="field-hint">
-                Local development identity provider — any username works.
+                Local development identity provider. Any username works.
               </span>
             </div>
           )}

@@ -37,7 +37,7 @@ function Insights() {
             <div className="card-sub">
               {data
                 ? `${data.period_start} → ${data.period_end}`
-                : 'Aggregated category totals are sent for analysis — never individual transactions'}
+                : 'Aggregated category totals are sent for analysis, never individual transactions'}
             </div>
           </div>
           <button className="btn btn-primary" onClick={run} disabled={loading}>

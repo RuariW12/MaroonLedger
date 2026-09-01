@@ -29,3 +29,9 @@ tfplan
 # Python bytecode from the diagram generator
 __pycache__/
 *.pyc
+
+# Cloud-sync conflict copies ("main 2.go"). Worth ignoring rather than just
+# deleting: Go compiles every .go file in a package directory, so one of these
+# breaks the build with redeclaration errors, and Terraform loads every .tf.
+* [0-9].*
+* [0-9]

@@ -6,11 +6,11 @@ diagrams can be checked rather than trusted.
 
 It exists because the previous diagram could not be. It showed four EC2
 instances inside the ECS cluster, an Auto Scaling boundary, and one ALB per
-availability zone. None of the three had ever been true — there is no
+availability zone. None of the three had ever been true. There is no
 `aws_instance`, no `aws_autoscaling_group`, and one `aws_lb`. A diagram nobody
 can check against the code drifts silently, and this one had drifted for months.
 
-## Diagram 1 — core
+## Diagram 1: core
 
 | Box | Backed by |
 |---|---|
@@ -31,7 +31,7 @@ can check against the code drifts silently, and this one had drifted for months.
 | VPC endpoints | `modules/vpc-endpoints` &#183; `aws_vpc_endpoint.interface` (ecr.api, ecr.dkr, logs, secretsmanager) + `.s3` gateway |
 | Observability row | `modules/observability` &#183; CloudWatch log group and 5 alarms, SNS topic + subscription, CloudTrail, GuardDuty, Config |
 
-## Diagram 2 — analytics
+## Diagram 2: analytics
 
 | Box | Backed by |
 |---|---|
@@ -73,7 +73,7 @@ Drawing everything is how a diagram becomes unreadable. Left off, with reasons:
 
 - **Individual IAM policies.** The roles are drawn; the policies attached to them
   are not. Which role can reach what is stated on the arrows instead.
-- **S3 bucket sub-resources** — public-access-block, SSE, ownership controls,
+- **S3 bucket sub-resources.** Public-access-block, SSE, ownership controls,
   versioning, lifecycle. Five resources per bucket that would add five boxes and
   no understanding.
 - **ACM certificates and their validation records.** Inert until `domain_name`

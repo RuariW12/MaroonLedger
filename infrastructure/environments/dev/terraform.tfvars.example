@@ -1,4 +1,4 @@
-# Compute stack — local values. Gitignored (*.tfvars).
+# Compute stack: local values. Gitignored (*.tfvars).
 
 project_name = "maroon-ledger"
 region       = "us-east-2"

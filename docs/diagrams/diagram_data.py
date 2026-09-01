@@ -9,7 +9,7 @@ c.frame(36, 44, 1588, 620, "AWS Cloud", INK, icon="general/general.png")
 # ---- producer, in the compute stack ---------------------------------------
 c.frame(70, 92, 250, 200, "Compute stack", ORANGE, fill="#FFF6EE", opacity=0.7, dashed=True)
 c.node(195, 178, "compute/fargate.png", "ECS Fargate task",
-       ["writes to RDS first,", "then emits &#8212; async,", "bounded, drops on", "backpressure"])
+       ["writes to RDS first,", "then emits asynchronously,", "bounded, drops on", "backpressure"])
 
 # ---- the data stack -------------------------------------------------------
 DX, DY, DW, DH = 360, 92, 1230, 500

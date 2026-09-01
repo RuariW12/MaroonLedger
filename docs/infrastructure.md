@@ -7,7 +7,7 @@ The diagrams are in `../README.md` and `data-pipeline.md`; `architecture-invento
 maps every box on them to the resource behind it.
 
 Everything described here exists in `infrastructure/`. Where a component is
-optional or disabled by default, that is stated explicitly — this document is
+optional or disabled by default, that is stated explicitly. This document is
 meant to survive someone reading it with the Terraform open next to it.
 
 **Defaults at a glance.** Several components cost real money and are therefore
@@ -64,8 +64,8 @@ Two certificates are required, because they live in different places:
 Both cover the same name and validate through the same hosted zone.
 
 **Why alias records.** An alias resolves directly to the distribution with no
-second lookup, is not billed per query, and can be attached to the zone apex —
-which a CNAME cannot.
+second lookup, is not billed per query, and can be attached to the zone apex, which a
+CNAME cannot.
 
 **Why the whole layer is optional.** Certificates cannot be issued for a domain
 you do not control, so hardcoding this would make the stack un-appliable for
@@ -93,7 +93,7 @@ cache key also keeps one user's responses out of another's cache.
 
 The API behaviour pins `min_ttl`, `default_ttl` and `max_ttl` to `0`. CloudFront
 otherwise applies a 24-hour default TTL, which would serve stale account
-balances and — worse — keep serving a user's data from the edge after they
+balances and, worse, keep serving a user's data from the edge after they
 signed out.
 
 **Why one distribution for both origins.** A unified domain, edge caching for
@@ -135,7 +135,7 @@ on every request.
   Cognito API; SRP proves knowledge of it without sending it.
 - **No client secret.** The client runs in a browser and cannot keep one, so the
   authorization-code flow is secured with PKCE instead.
-- **TOTP MFA only.** SMS is deliberately not offered — SIM-swap attacks make it
+- **TOTP MFA only.** SMS is deliberately not offered. SIM-swap attacks make it
   the weakest common second factor, and it carries a per-message cost.
 - **A 12-character password policy** requiring all four character classes.
 - **Token revocation enabled**, so signing out invalidates the refresh token
@@ -154,7 +154,7 @@ the need to implement the SRP flow in the frontend.
 against a JWKS URL; it has no knowledge of Cognito specifically. Locally that
 URL points at `app/cmd/devidp`, a small identity provider that mints tokens for
 any username. This is why there is **no authentication bypass flag in the
-server** — a bypass that exists in the code is a bypass that can ship. The
+server**. A bypass that exists in the code is a bypass that can ship. The
 authenticated request path is identical in both environments.
 
 ---
@@ -163,7 +163,7 @@ authenticated request path is identical in both environments.
 
 ### VPC & Regional Layout
 
-A single VPC in `us-east-2` with a `10.0.0.0/16` CIDR — 65,536 addresses, far
+A single VPC in `us-east-2` with a `10.0.0.0/16` CIDR, giving 65,536 addresses, far
 more than needed, leaving room for subnet growth without renumbering.
 
 ### Subnet Tiers
@@ -186,8 +186,8 @@ default route is enforcement.
 ### Internet Gateway & NAT Gateways
 
 The IGW carries public traffic to and from the ALB. A NAT Gateway lets ECS tasks
-make outbound connections — pulling packages, reaching AWS APIs not covered by
-an endpoint — without being reachable from outside.
+make outbound connections (pulling packages, reaching AWS APIs not covered by
+an endpoint) without being reachable from outside.
 
 **One NAT Gateway is shared across both AZs by default.** At roughly $32/month
 each, a second NAT Gateway is the single largest avoidable cost in this stack.
@@ -210,7 +210,7 @@ endpoint is specifically required for image pulls to work without NAT, because
 ECR stores layers in S3.
 
 **Why they are off by default.** Interface endpoints bill hourly per endpoint
-per AZ. Seven endpoints across two AZs is roughly $50/month — more than the rest
+per AZ. Seven endpoints across two AZs is roughly $50/month, more than the rest
 of the stack combined at this scale. The Gateway endpoint is free; only the
 interface endpoints carry the cost.
 
@@ -224,7 +224,7 @@ Deployed across both public subnets. Health checks on `/health` every 30 seconds
 determine which tasks receive traffic.
 
 **With a certificate** (i.e. `domain_name` set) it terminates TLS on 443 using
-`ELBSecurityPolicy-TLS13-1-2-2021-06` — TLS 1.2 floor, 1.3 enabled — and port 80
+`ELBSecurityPolicy-TLS13-1-2-2021-06` (TLS 1.2 floor, 1.3 enabled), and port 80
 issues a 301 redirect. **Without one** it serves HTTP on port 80 only.
 
 Either way, the ALB security group admits traffic **only from CloudFront's
@@ -233,7 +233,7 @@ resolving the ALB's public DNS name and bypassing the WAF entirely; without it,
 edge protection is decorative.
 
 **Why an ALB rather than an NLB.** Path-based routing, native ECS integration,
-and health-check-driven traffic shaping — none of which a Network Load Balancer
+and health-check-driven traffic shaping, none of which a Network Load Balancer
 provides.
 
 ### Elastic Container Service on Fargate
@@ -261,7 +261,7 @@ are real, but choosing it for this workload would be justifying infrastructure
 by what it teaches rather than what it needs.
 
 **IAM: two roles, deliberately.** The **execution role** is used by the ECS
-agent before the container starts — pulling the image, creating log streams,
+agent before the container starts: pulling the image, creating log streams,
 resolving the database secret. The **task role** is what application code
 assumes at runtime, and holds the Bedrock permissions. Keeping them separate
 means application code cannot borrow the agent's permissions. Merging them is a
@@ -311,10 +311,10 @@ constraint support, and exact `DECIMAL` arithmetic, which matters for money.
 
 Three buckets, all with public access blocked:
 
-- **Frontend** — the React bundle, readable only by CloudFront through Origin
+- **Frontend.** The React bundle, readable only by CloudFront through Origin
   Access Control.
-- **CloudTrail** — audit log delivery.
-- **AWS Config** — configuration snapshot delivery.
+- **CloudTrail.** Audit log delivery.
+- **AWS Config.** Configuration snapshot delivery.
 
 **Why S3 behind CloudFront for static assets.** It separates static delivery
 from the application tier, offloads traffic to the edge, and costs a fraction of
@@ -348,7 +348,7 @@ no difference in code**.
 
 **IAM scope.** `bedrock:InvokeModel` and `InvokeModelWithResponseStream`,
 restricted to Anthropic foundation models in-region and to inference profiles in
-this account — not `Resource: "*"`. The policy is only created when the service
+this account, not `Resource: "*"`. The policy is only created when the service
 is actually configured for Bedrock.
 
 **Why there is a second implementation.** `ai.Provider` has two
@@ -363,7 +363,7 @@ never mistaken for real inference.
 billing.
 
 **Data minimisation.** Insight generation sends **only aggregated category
-totals** — never individual transaction descriptions, account names, or
+totals**, never individual transaction descriptions, account names, or
 identifiers. Anomaly detection sends per-category aggregates as the baseline
 rather than the rows themselves. The categorisation path is the only one that
 sends a raw description, and it sends exactly one, truncated to 200 characters.
@@ -388,7 +388,7 @@ retention. Five alarms publish to the alerts topic:
 | RDS free storage | <2 GB | Storage exhaustion is unrecoverable in place |
 
 The ALB alarms set `treat_missing_data = "notBreaching"`, because "no errors"
-reports as no data rather than zero — without it the alarm sits permanently in
+reports as no data rather than zero. Without it the alarm sits permanently in
 `INSUFFICIENT_DATA` while the service is healthy.
 
 ### AWS CloudTrail
@@ -405,7 +405,7 @@ exfiltration, cryptomining, and communication with known-malicious hosts.
 **Findings are routed, not just recorded.** An EventBridge rule matches findings
 at **severity 4.0 and above** and forwards them to SNS through an input
 transformer that extracts severity, type, region and description. Low-severity
-informational findings are filtered out deliberately — an alert channel that is
+informational findings are filtered out deliberately, because an alert channel that is
 mostly noise stops being read.
 
 ### AWS Config
@@ -418,7 +418,7 @@ A customer-managed key with automatic annual rotation encrypts RDS storage and
 backups, and the Secrets Manager values. Every use is logged to CloudTrail.
 
 **Why customer-managed rather than the AWS-managed default.** Control over the
-key policy, rotation cadence and cross-account access — all of which matter in a
+key policy, rotation cadence and cross-account access, all of which matter in a
 compliance context even though the underlying cryptography is identical.
 
 The SNS alerts topic uses the **AWS-managed** SNS key rather than this one.
@@ -444,8 +444,8 @@ The event carries six fields and deliberately excludes the transaction
 description, the account ID, and the owning user, which is the same
 data-minimisation posture as the Bedrock integration.
 
-Full detail — schema, cost table, lifecycle rules, query examples, and the Glue
-job's `SystemExit` gotcha — is in `data-pipeline.md`.
+Full detail is in `data-pipeline.md`: schema, cost table, lifecycle rules, query
+examples, and the Glue job's `SystemExit` gotcha.
 
 ---
 
@@ -466,7 +466,7 @@ scale:
 | `rds-sg` | `ecs-sg` | 5432 | Database traffic only from ECS tasks |
 | `vpce-sg` | `ecs-sg` | 443 | Endpoint traffic only from ECS tasks |
 
-CloudFront is the one tier that cannot be chained — it does not live in the VPC
+CloudFront is the one tier that cannot be chained, because it does not live in the VPC
 and has no security group to reference. The AWS-published managed prefix list is
 the closest equivalent.
 
@@ -481,8 +481,8 @@ does four things beyond checking the signature and expiry:
 
 1. **Pins the accepted algorithm to RS256.** This is what blocks the `alg: none`
    and HMAC key-confusion attack families.
-2. **Requires `token_use = "access"`**, so an ID token — issued for the
-   frontend's own use — cannot be replayed as an API credential.
+2. **Requires `token_use = "access"`**, so an ID token, issued for the
+   frontend's own use, cannot be replayed as an API credential.
 3. **Checks `client_id`.** A valid signature only proves the pool minted the
    token, not that it minted it *for us*. Without this, a token issued to any
    other app client in the same user pool would be accepted.
@@ -493,7 +493,7 @@ Service identity is IAM roles, scoped as described in Layer 4.
 
 **Data is scoped per user in the query, not in the handler.** Accounts carry the
 owner's Cognito `sub`, and every read filters on it. Transactions have no owner
-of their own — ownership is always established by joining through the account —
+of their own; ownership is always established by joining through the account,
 so guessing an account ID cannot reach another user's data. An account belonging
 to someone else returns **404, not 403**, because a 403 confirms the ID exists.
 
@@ -526,7 +526,7 @@ over native TLS.
 
 Without a domain configured, the CloudFront-to-ALB hop is HTTP. It stays inside
 AWS's network and the ALB is reachable only from CloudFront, but it is genuinely
-the weakest link in the current default configuration — and it closes the moment
+the weakest link in the current default configuration, and it closes the moment
 `domain_name` is set.
 
 ### Application Hardening
@@ -535,7 +535,7 @@ Request bodies are capped at 1 MiB and reject unknown fields, so a client
 sending `user_id` gets an error rather than the impression the server honoured
 it. Amounts are rejected if not finite. Responses carry `nosniff`, `DENY`
 framing, `no-referrer`, `no-store` and HSTS. A per-identity rate limiter caps
-the model-backed endpoints, which is the dimension that maps to spend — WAF's
+the model-backed endpoints, which is the dimension that maps to spend. WAF's
 per-IP limit does not.
 
 ---
@@ -570,7 +570,7 @@ half a document.
   are limited per identity. The summary endpoint is a plain database aggregate
   and is not, which is a gap rather than a decision.
 - **Integration tests against a real Postgres.** The netting bug in the category
-  aggregation was a SQL defect, and no unit test could have caught it — it was
+  aggregation was a SQL defect, and no unit test could have caught it. It was
   found by reading two numbers on screen that disagreed, and confirmed by
   running both queries against a throwaway container. A handful of handler tests
   against a real database would have caught it earlier and is the highest-value

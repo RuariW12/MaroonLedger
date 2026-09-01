@@ -1,5 +1,5 @@
 /**
- * Stat — one headline figure.
+ * Stat: one headline figure.
  *
  * Lives here because the dashboard and the account view had byte-identical
  * copies apart from one optional prop, which is exactly how two copies drift

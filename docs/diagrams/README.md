@@ -1,7 +1,7 @@
 # Diagram sources
 
 The architecture diagrams in `docs/images/` are generated, not drawn. Regenerating
-them after an infrastructure change is a code edit, which is the point — the
+them after an infrastructure change is a code edit, which is the point. The
 previous Lucidchart export drifted until it described a cluster of EC2 instances
 that never existed.
 

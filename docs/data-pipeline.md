@@ -46,7 +46,7 @@ needed, no cost. Enabling it is explicit, the same posture as the AI provider.
               │
               ▼
    ┌──────────────────────┐
-   │  Athena workgroup    │   partition projection — no crawler, no MSCK
+   │  Athena workgroup    │   partition projection, no crawler
    │  1 GiB scan cap      │   results expire after 30 days
    └──────────────────────┘
 ```
@@ -88,7 +88,7 @@ Two stacks, applied in order. The data stack is independent and safe to leave
 running. The compute stack is the destroyable one.
 
 ```bash
-# 1. Data stack — serverless, no idle cost
+# 1. Data stack: serverless, no idle cost
 cd infrastructure/environments/data
 terraform init && terraform apply
 
@@ -110,7 +110,7 @@ definition:
 | Variable | Default | Effect |
 |---|---|---|
 | `DATA_PIPELINE` | `off` | `firehose` enables emission |
-| `DATA_PIPELINE_STREAM` | — | Delivery stream name; required when enabled |
+| `DATA_PIPELINE_STREAM` | none | Delivery stream name; required when enabled |
 
 To turn it off, re-apply the compute stack with `-var 'data_pipeline=off'`. The
 task role loses its Firehose permission and the app reverts to the no-op

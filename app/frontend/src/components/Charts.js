@@ -30,7 +30,7 @@ export function money(value, { compact = false, sign = false } = {}) {
 }
 
 /**
- * Sparkline — trend at a glance, no axes, no labels.
+ * Sparkline: trend at a glance, no axes, no labels.
  *
  * Deliberately has no tooltip: it sits inside a row that is itself clickable,
  * and a hover target inside a hover target is a usability trap. The detail
@@ -72,7 +72,7 @@ export function Sparkline({ values, width = 78, height = 26, stroke = 'var(--bra
 }
 
 /**
- * BalanceArea — balance over time, one series.
+ * BalanceArea: balance over time, one series.
  *
  * One series means no legend: the card title names it. A crosshair and tooltip
  * are the default for a line/area chart, not an enhancement, so the reader can
@@ -272,7 +272,7 @@ export function categoryColor(category) {
 }
 
 /**
- * CategoryBars — ranked magnitude.
+ * CategoryBars: ranked magnitude.
  *
  * Ranked bars read magnitude far more accurately than a pie. Identity is
  * carried by the row label first and the hue second: the label is what makes
