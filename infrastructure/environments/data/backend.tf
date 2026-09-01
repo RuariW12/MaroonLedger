@@ -1,14 +1,19 @@
-# Separate state key from the compute stack.
+# Remote state.
 #
-# This is what makes `terraform destroy` in environments/dev incapable of
-# touching the lake: the two root modules address different state objects, so
-# the compute stack has no record of these resources to destroy.
+# Each stack has its own key in one bucket. Separate keys are what make the
+# stacks independently destroyable: `terraform destroy` in one root module
+# addresses a different state object and has no record of the other's
+# resources.
+#
+# Locking is native S3 (a lock file beside the state object), not DynamoDB.
+# Terraform 1.10+ supports it and deprecates the `dynamodb_table` argument, so
+# there is no lock table to provision or pay for.
 terraform {
   backend "s3" {
-    bucket         = "maroon-ledger-terraform-state"
-    key            = "data/terraform.tfstate"
-    region         = "us-east-2"
-    dynamodb_table = "maroon-ledger-terraform-lock"
-    encrypt        = true
+    bucket       = "maroon-ledger-tfstate-4cc78b"
+    key          = "data/terraform.tfstate"
+    region       = "us-east-2"
+    encrypt      = true
+    use_lockfile = true
   }
 }

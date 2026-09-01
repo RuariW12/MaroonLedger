@@ -10,7 +10,7 @@ output "cloudfront_distribution_id" {
 
 output "frontend_bucket_name" {
   description = "S3 bucket name for frontend deployment"
-  value       = module.s3_frontend.s3_bucket_id
+  value       = aws_s3_bucket.frontend.id
 }
 
 output "cloudfront_hosted_zone_id" {

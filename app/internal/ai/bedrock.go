@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 )
 
 // DefaultModel is the Bedrock model id used when none is configured.
@@ -21,17 +22,34 @@ const DefaultModel = "anthropic.claude-opus-5"
 
 // Bedrock is a Provider backed by Claude on Amazon Bedrock.
 type Bedrock struct {
-	client *bedrock.MantleClient
-	model  string
+	messages *anthropic.MessageService
+	model    string
 }
 
 // BedrockConfig configures the Bedrock provider.
 type BedrockConfig struct {
 	// Region is the AWS region hosting Bedrock, e.g. "us-east-2".
 	Region string
-	// Model overrides DefaultModel.
+	// Model overrides DefaultModel. The accepted form depends on API:
+	// Mantle takes "anthropic.claude-opus-5", while the runtime path takes an
+	// inference profile such as "us.anthropic.claude-sonnet-4-6".
 	Model string
+	// API selects the Bedrock surface: "mantle" or "runtime".
+	//
+	// Mantle is the newer Anthropic-operated Messages endpoint and the better
+	// default, but it is not available to every account or region -- where it
+	// is not, it answers 404 for every model rather than reporting that the
+	// account lacks access. "runtime" is the classic bedrock-runtime
+	// InvokeModel path, which is where most accounts' model grants and
+	// inference profiles live.
+	API string
 }
+
+// Bedrock API surfaces.
+const (
+	APIMantle  = "mantle"
+	APIRuntime = "runtime"
+)
 
 // NewBedrock builds a Bedrock-backed provider.
 //
@@ -47,12 +65,23 @@ func NewBedrock(ctx context.Context, cfg BedrockConfig) (*Bedrock, error) {
 		model = DefaultModel
 	}
 
-	client, err := bedrock.NewMantleClient(ctx, bedrock.MantleClientConfig{AWSRegion: cfg.Region})
-	if err != nil {
-		return nil, fmt.Errorf("ai: create bedrock client: %w", err)
-	}
+	switch api := cfg.API; api {
+	case "", APIMantle:
+		client, err := bedrock.NewMantleClient(ctx, bedrock.MantleClientConfig{AWSRegion: cfg.Region})
+		if err != nil {
+			return nil, fmt.Errorf("ai: create bedrock mantle client: %w", err)
+		}
+		return &Bedrock{messages: &client.Messages, model: model}, nil
 
-	return &Bedrock{client: client, model: model}, nil
+	case APIRuntime:
+		// Credentials resolve through the same default chain; the region comes
+		// from the loaded AWS config.
+		client := anthropic.NewClient(bedrock.WithLoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region)))
+		return &Bedrock{messages: &client.Messages, model: model}, nil
+
+	default:
+		return nil, fmt.Errorf("ai: bedrock API must be %q or %q, got %q", APIMantle, APIRuntime, api)
+	}
 }
 
 func (b *Bedrock) Name() string { return "bedrock" }
@@ -130,7 +159,7 @@ func insightsSchema() map[string]any {
 
 // complete issues one structured request and decodes the JSON result into out.
 func (b *Bedrock) complete(ctx context.Context, system, user string, schema map[string]any, effort anthropic.OutputConfigEffort, maxTokens int64, out any) error {
-	resp, err := b.client.Messages.New(ctx, anthropic.MessageNewParams{
+	resp, err := b.messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(b.model),
 		MaxTokens: maxTokens,
 		System:    []anthropic.TextBlockParam{{Text: system}},

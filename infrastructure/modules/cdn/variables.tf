@@ -26,3 +26,15 @@ variable "alb_certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "enable_waf" {
+  description = "Attach a WAF web ACL to the distribution. Set false only where an SCP denies wafv2 at CloudFront scope; the distribution then serves without one."
+  type        = bool
+  default     = true
+}
+
+variable "bucket_suffix" {
+  description = "Suffix for the frontend bucket. S3 names are global, so a bare project name collides with any account that has ever used it."
+  type        = string
+  default     = ""
+}

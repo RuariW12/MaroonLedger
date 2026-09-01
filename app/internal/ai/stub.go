@@ -138,6 +138,14 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 	var totalCount int
 	var totalAmount, overallMax float64
 
+	// Tracks which baseline actually got used, so the reason text can name it.
+	// Reporting the transaction's own category regardless would describe a
+	// comparison that never happened: the first transaction in a new category
+	// has no peers, gets scored against the whole account, and would still
+	// claim to be "11.3x the usual for housing" when housing had no history at
+	// all to be usual about.
+	scope := in.Category
+
 	if in.Category != "" {
 		for _, stat := range baseline {
 			if stat.Category == in.Category {
@@ -150,6 +158,7 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 	}
 
 	if totalCount == 0 {
+		scope = ""
 		for _, stat := range baseline {
 			totalCount += stat.Count
 			totalAmount += math.Abs(stat.TotalAmount)
@@ -183,19 +192,19 @@ func (s *Stub) DetectAnomaly(ctx context.Context, in TransactionInput, baseline 
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityHigh,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s and more than double the previous largest.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s and more than double the previous largest.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	case amount > mean*3:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityMedium,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	case amount > mean*2:
 		return &AnomalyAssessment{
 			Anomalous: true,
 			Severity:  SeverityLow,
-			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(in.Category)),
+			Reason:    fmt.Sprintf("Amount is %.1fx the usual for %s.", amount/mean, comparisonLabel(scope)),
 		}, nil
 	default:
 		return &AnomalyAssessment{
@@ -216,16 +225,13 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 		}, nil
 	}
 
-	// Only outflows count as spending. Folding income in would both inflate the
-	// totals and let a salary be reported as the largest "spending" category.
-	var ranked []CategorySpend
+	// ByCategory is spending only, already positive, and carries no income
+	// rows -- see handlers.categoryOutflow. Ranking is redone here rather than
+	// trusted from the caller, since Provider takes a summary from anywhere.
+	ranked := append([]CategorySpend(nil), summary.ByCategory...)
 	var spend float64
-	for _, c := range summary.ByCategory {
-		if c.Total >= 0 {
-			continue
-		}
-		ranked = append(ranked, c)
-		spend += math.Abs(c.Total)
+	for _, c := range ranked {
+		spend += c.Total
 	}
 
 	if len(ranked) == 0 || spend == 0 {
@@ -238,10 +244,10 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 		}, nil
 	}
 
-	sort.Slice(ranked, func(i, j int) bool { return math.Abs(ranked[i].Total) > math.Abs(ranked[j].Total) })
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i].Total > ranked[j].Total })
 
 	top := ranked[0]
-	topShare := math.Abs(top.Total) / spend * 100
+	topShare := top.Total / spend * 100
 
 	net := summary.TotalInflow - summary.TotalOutflow
 	direction := "more than you took in"
@@ -250,13 +256,13 @@ func (s *Stub) GenerateInsights(ctx context.Context, summary SpendingSummary) (*
 	}
 
 	observations := []string{
-		fmt.Sprintf("%s is your largest spending category at %s, which is %.0f%% of outgoings.", capitalize(top.Category), usd(math.Abs(top.Total)), topShare),
+		fmt.Sprintf("%s is your largest spending category at %s, which is %.0f%% of outgoings.", capitalize(top.Category), usd(top.Total), topShare),
 		fmt.Sprintf("You spent %s across %d spending categories, %s (%s net).", usd(spend), len(ranked), direction, usd(net)),
 	}
 	if len(ranked) > 1 {
 		second := ranked[1]
 		observations = append(observations, fmt.Sprintf(
-			"%s follows at %s across %d transactions.", capitalize(second.Category), usd(math.Abs(second.Total)), second.Count))
+			"%s follows at %s across %d transactions.", capitalize(second.Category), usd(second.Total), second.Count))
 	}
 
 	recommendations := []string{

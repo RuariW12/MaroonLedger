@@ -47,12 +47,6 @@ type balancePoint struct {
 	Balance float64 `json:"balance"`
 }
 
-type categoryBucket struct {
-	Category string  `json:"category"`
-	Count    int     `json:"count"`
-	Total    float64 `json:"total"`
-}
-
 type anomalyHeadline struct {
 	ID          int     `json:"id"`
 	AccountID   int     `json:"account_id"`
@@ -100,7 +94,6 @@ func (h *SummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 		PeriodStart: start.Format(time.DateOnly),
 		PeriodEnd:   end.Format(time.DateOnly),
 		Accounts:    make([]accountSummary, 0, len(accounts)),
-		ByCategory:  []categoryBucket{},
 		Anomalies:   []anomalyHeadline{},
 	}
 
@@ -141,13 +134,15 @@ func (h *SummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.categories(r, userID, start, end, &resp); err != nil {
+	resp.ByCategory, err = categoryOutflow(r.Context(), h.DB, userID, start, end)
+	if err != nil {
 		http.Error(w, "Failed to summarise categories", http.StatusInternalServerError)
 		log.Printf("summary: categories: %v", err)
 		return
 	}
 
-	if err := h.cashflow(r, userID, start, end, &resp); err != nil {
+	resp.TotalInflow, resp.TotalOutflow, err = cashflow(r.Context(), h.DB, userID, start, end)
+	if err != nil {
 		http.Error(w, "Failed to summarise cash flow", http.StatusInternalServerError)
 		log.Printf("summary: cashflow: %v", err)
 		return
@@ -234,52 +229,6 @@ func balanceSeries(current float64, deltas map[string]float64, timeline []time.T
 		running -= deltas[timeline[i].Format(time.DateOnly)]
 	}
 	return series
-}
-
-func (h *SummaryHandler) categories(r *http.Request, userID string, start, end time.Time, resp *summaryResponse) error {
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT t.category, COUNT(*), COALESCE(SUM(t.amount), 0)
-		FROM transactions t
-		JOIN accounts a ON a.id = t.account_id
-		WHERE a.user_id = $1 AND t.date >= $2 AND t.date < $3
-		GROUP BY t.category
-		ORDER BY SUM(ABS(t.amount)) DESC`, userID, start, end)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var c categoryBucket
-		if err := rows.Scan(&c.Category, &c.Count, &c.Total); err != nil {
-			return err
-		}
-		c.Total = round2(c.Total)
-		resp.ByCategory = append(resp.ByCategory, c)
-	}
-
-	return rows.Err()
-}
-
-// cashflow totals money in and money out from the signed amounts themselves.
-//
-// Deriving these from the per-category nets is wrong whenever a category holds
-// movement in both directions. "transfer" is the common case: +1,800 into
-// savings and -6,400 on a wire nets to -4,600, which erases 1,800 of real
-// inflow and understates outflow by the same amount -- and the savings rate
-// computed from those figures comes out negative when it should be strongly
-// positive. Splitting on the sign of each row is the only way to get both
-// sides right.
-func (h *SummaryHandler) cashflow(r *http.Request, userID string, start, end time.Time, resp *summaryResponse) error {
-	return h.DB.QueryRowContext(r.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN t.amount > 0 THEN  t.amount ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN t.amount < 0 THEN -t.amount ELSE 0 END), 0)
-		FROM transactions t
-		JOIN accounts a ON a.id = t.account_id
-		WHERE a.user_id = $1 AND t.date >= $2 AND t.date < $3`,
-		userID, start, end,
-	).Scan(&resp.TotalInflow, &resp.TotalOutflow)
 }
 
 // anomalies returns the transactions worth surfacing on the dashboard: the

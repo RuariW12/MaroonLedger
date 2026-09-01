@@ -115,7 +115,7 @@ function Dashboard({ onSelectAccount }) {
           valueClass="value-neg"
           // Only spending categories: income sitting in a "Spending" tile's
           // subtitle reads as though salary were an expense.
-          footNote={`${summary.by_category.filter((c) => c.total < 0).length} categories`}
+          footNote={`${summary.by_category.length} categories`}
         />
         <Stat
           label="Savings Rate"

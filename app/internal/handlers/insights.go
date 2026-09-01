@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"log"
-	"math"
 	"net/http"
 	"time"
 
@@ -22,21 +21,15 @@ type InsightsHandler struct {
 const defaultInsightWindow = 90 * 24 * time.Hour
 
 type insightsResponse struct {
-	Summary         string             `json:"summary"`
-	Observations    []string           `json:"observations"`
-	Recommendations []string           `json:"recommendations"`
-	Provider        string             `json:"provider"`
-	PeriodStart     string             `json:"period_start"`
-	PeriodEnd       string             `json:"period_end"`
-	TotalInflow     float64            `json:"total_inflow"`
-	TotalOutflow    float64            `json:"total_outflow"`
-	ByCategory      []categoryBreakout `json:"by_category"`
-}
-
-type categoryBreakout struct {
-	Category string  `json:"category"`
-	Count    int     `json:"count"`
-	Total    float64 `json:"total"`
+	Summary         string           `json:"summary"`
+	Observations    []string         `json:"observations"`
+	Recommendations []string         `json:"recommendations"`
+	Provider        string           `json:"provider"`
+	PeriodStart     string           `json:"period_start"`
+	PeriodEnd       string           `json:"period_end"`
+	TotalInflow     float64          `json:"total_inflow"`
+	TotalOutflow    float64          `json:"total_outflow"`
+	ByCategory      []categoryBucket `json:"by_category"`
 }
 
 // Generate analyses the authenticated user's spending over a period.
@@ -108,47 +101,32 @@ func (h *InsightsHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *InsightsHandler) summarise(r *http.Request, userID string, start, end time.Time) (ai.SpendingSummary, []categoryBreakout, error) {
-	// The join on accounts is what scopes this to the caller. Transactions
-	// carry no user_id of their own, so ownership is always established
-	// through the account that holds them.
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT t.category, COUNT(*), COALESCE(SUM(t.amount), 0)
-		FROM transactions t
-		JOIN accounts a ON a.id = t.account_id
-		WHERE a.user_id = $1 AND t.date >= $2 AND t.date < $3
-		GROUP BY t.category
-		ORDER BY SUM(ABS(t.amount)) DESC`, userID, start, end)
+func (h *InsightsHandler) summarise(r *http.Request, userID string, start, end time.Time) (ai.SpendingSummary, []categoryBucket, error) {
+	breakout, err := categoryOutflow(r.Context(), h.DB, userID, start, end)
 	if err != nil {
 		return ai.SpendingSummary{}, nil, err
 	}
-	defer rows.Close()
+
+	// Inflow and outflow come from the signed rows, not from summing the
+	// breakout above. The breakout is spending only, so totalling it would
+	// report no income at all and would miss any outflow that a same-category
+	// inflow had offset.
+	inflow, outflow, err := cashflow(r.Context(), h.DB, userID, start, end)
+	if err != nil {
+		return ai.SpendingSummary{}, nil, err
+	}
 
 	summary := ai.SpendingSummary{
-		PeriodStart: start,
-		PeriodEnd:   end,
-		Currency:    "USD",
+		PeriodStart:  start,
+		PeriodEnd:    end,
+		Currency:     "USD",
+		TotalInflow:  inflow,
+		TotalOutflow: outflow,
 	}
-	breakout := []categoryBreakout{}
-
-	for rows.Next() {
-		var c categoryBreakout
-		if err := rows.Scan(&c.Category, &c.Count, &c.Total); err != nil {
-			return ai.SpendingSummary{}, nil, err
-		}
-		breakout = append(breakout, c)
-
-		if c.Total >= 0 {
-			summary.TotalInflow += c.Total
-		} else {
-			summary.TotalOutflow += math.Abs(c.Total)
-		}
+	for _, c := range breakout {
 		summary.ByCategory = append(summary.ByCategory, ai.CategorySpend{
 			Category: c.Category, Count: c.Count, Total: c.Total,
 		})
-	}
-	if err := rows.Err(); err != nil {
-		return ai.SpendingSummary{}, nil, err
 	}
 
 	return summary, breakout, nil

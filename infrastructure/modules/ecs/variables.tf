@@ -111,3 +111,9 @@ variable "data_pipeline_stream_name" {
   type        = string
   default     = ""
 }
+
+variable "bedrock_api" {
+  description = "Bedrock surface: 'mantle' (newer Anthropic-operated Messages endpoint) or 'runtime' (classic bedrock-runtime). Mantle is not available to every account and answers 404 for every model where it is not."
+  type        = string
+  default     = "mantle"
+}

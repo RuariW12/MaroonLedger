@@ -18,6 +18,24 @@ off by default. The stack applies and runs without any of them:
 | `cognito_advanced_security_mode` | `"OFF"` | Compromised-credential detection and adaptive auth (billed per MAU) |
 | `ai_provider` | `"bedrock"` | Bedrock IAM policy on the task role; `"stub"` attaches nothing |
 | `alert_email` | `""` | Email subscription to the alerts topic |
+| `data_pipeline` | `"off"` | `"firehose"` emits analytics events and attaches the Firehose policy to the task role |
+| `bedrock_api` | `"mantle"` | Which Bedrock API surface to call; `"runtime"` uses the classic bedrock-runtime endpoint |
+
+Three more default to the production-correct value and are turned *off* only in
+the gitignored tfvars, because the sandbox account this was deployed into
+forbids them outright rather than merely charging for them:
+
+| Variable | Default | Why it gets overridden |
+|---|---|---|
+| `enable_waf` | `true` | An SCP denies WAF at CloudFront scope |
+| `enable_guardduty` | `true` | An SCP denies GuardDuty entirely |
+| `rds_multi_az` | `true` | Not available on the free tier |
+| `rds_backup_retention_days` | `7` | Capped on the free tier |
+| `alb_ingress_ports` | `[80]` | CloudFront's managed prefix list consumes ~55 of the 60 rules-per-security-group quota, so only one ingress rule fits |
+
+Defaulting these to on and overriding them locally is deliberate. The repository
+should describe the architecture I would deploy, not the one a particular
+sandbox permitted.
 
 ---
 
@@ -406,6 +424,28 @@ together for no benefit.
 
 ---
 
+## Layer 8: Analytics
+
+A streaming pipeline running alongside the transactional database: Kinesis
+Firehose to an S3 lake, a nightly Glue PySpark job producing partitioned
+Parquet, and Athena over the result with partition projection rather than a
+crawler.
+
+It lives in its own root module (`infrastructure/environments/data`) with its
+own state key, and the two stacks share no `terraform_remote_state`. That
+separation is the point: the compute stack carries the hourly cost floor and is
+meant to be destroyed between demos, while the lake costs nothing idle and stays
+up. Destroying one cannot touch the other because neither has a record of it.
+
+The event carries six fields and deliberately excludes the transaction
+description, the account ID, and the owning user, which is the same
+data-minimisation posture as the Bedrock integration.
+
+Full detail — schema, cost table, lifecycle rules, query examples, and the Glue
+job's `SystemExit` gotcha — is in `data-pipeline.md`.
+
+---
+
 ## Security Model
 
 Defence in depth: no single control is trusted on its own.
@@ -520,5 +560,15 @@ half a document.
   documented in `app/frontend/src/auth.js` rather than left implicit. It is the
   right upgrade if this ever holds real money.
 - **Automated tests against live AWS.** The Go test suite covers token
-  verification, the category allowlist, and the stub provider. Nothing tests the
-  Terraform beyond `validate`; there is no Terratest suite.
+  verification, the category allowlist, the anomaly baseline logic, and the
+  analytics event schema. Nothing tests the Terraform beyond `validate`; there
+  is no Terratest suite.
+- **A rate limit on `GET /api/summary`.** The endpoints that cost money per call
+  are limited per identity. The summary endpoint is a plain database aggregate
+  and is not, which is a gap rather than a decision.
+- **Integration tests against a real Postgres.** The netting bug in the category
+  aggregation was a SQL defect, and no unit test could have caught it — it was
+  found by reading two numbers on screen that disagreed, and confirmed by
+  running both queries against a throwaway container. A handful of handler tests
+  against a real database would have caught it earlier and is the highest-value
+  testing work outstanding.

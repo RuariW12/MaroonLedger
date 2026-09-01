@@ -1,9 +1,9 @@
 output "state_bucket_name" {
-  description = "S3 bucket name for Terraform state"
+  description = "S3 bucket holding Terraform state for every stack. Must match the bucket in each environment's backend.tf."
   value       = module.s3_bucket.s3_bucket_id
 }
 
-output "lock_table_name" {
-  description = "DynamoDB table name for state locking"
-  value       = module.dynamodb_table.dynamodb_table_id
+output "state_bucket_region" {
+  description = "Region the state bucket lives in"
+  value       = var.region
 }

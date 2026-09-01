@@ -55,3 +55,15 @@ variable "skip_final_snapshot" {
   type        = bool
   default     = true
 }
+
+variable "multi_az" {
+  description = "Run a synchronous standby in a second AZ. The correct posture for a stateful tier, but AWS free-tier accounts cannot provision it and it roughly doubles instance cost."
+  type        = bool
+  default     = true
+}
+
+variable "backup_retention_days" {
+  description = "Automated backup retention. Free-tier accounts reject values above their cap; 0 disables automated backups entirely and is only appropriate for disposable demo data."
+  type        = number
+  default     = 7
+}

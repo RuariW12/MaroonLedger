@@ -9,8 +9,9 @@ variable "region" {
 }
 
 variable "container_image" {
-  description = "Docker image URI for the app container"
+  description = "Docker image URI for the app container. Leave empty to use the ECR repository this stack creates, tagged :latest -- which removes the chicken-and-egg of needing an image URI before the repository exists."
   type        = string
+  default     = ""
 }
 
 variable "hosted_ui_domain_prefix" {
@@ -100,4 +101,46 @@ variable "data_pipeline_stream_name" {
   description = "firehose_stream_name output from the data stack"
   type        = string
   default     = ""
+}
+
+variable "enable_waf" {
+  description = "Attach a WAF web ACL to the CloudFront distribution. Set false only where an SCP denies wafv2 at CloudFront scope."
+  type        = bool
+  default     = true
+}
+
+variable "bucket_suffix" {
+  description = "Suffix appended to globally-named S3 buckets (frontend, CloudTrail, Config). Required whenever the bare project name has been used by another account."
+  type        = string
+  default     = ""
+}
+
+variable "alb_ingress_ports" {
+  description = "Ports the ALB accepts from CloudFront. One port only unless the SG rule quota has been raised -- each prefix-list rule consumes ~55 of 60."
+  type        = list(number)
+  default     = [80]
+}
+
+variable "enable_guardduty" {
+  description = "Create a GuardDuty detector. Set false where an SCP denies it."
+  type        = bool
+  default     = true
+}
+
+variable "rds_multi_az" {
+  description = "Run an RDS standby in a second AZ. Not available to free-tier accounts."
+  type        = bool
+  default     = true
+}
+
+variable "rds_backup_retention_days" {
+  description = "RDS automated backup retention. Free-tier accounts cap this well below the production default."
+  type        = number
+  default     = 7
+}
+
+variable "bedrock_api" {
+  description = "Bedrock surface: 'mantle' or 'runtime'."
+  type        = string
+  default     = "mantle"
 }

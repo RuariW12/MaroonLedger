@@ -18,7 +18,14 @@ module "datalake" {
   curated_ia_after_days = var.curated_ia_after_days
 }
 
+# Gated because some AWS Organizations deny firehose outright via SCP, which
+# sits above IAM and cannot be overridden from inside the account. With it off
+# the lake, the Glue ETL and Athena still deploy -- raw/ is then populated by
+# uploading JSON to S3 directly rather than by streaming ingest, which is
+# enough to exercise and demonstrate the whole downstream pipeline.
 module "firehose" {
+  count = var.enable_firehose ? 1 : 0
+
   source       = "../../modules/firehose"
   project_name = var.project_name
 

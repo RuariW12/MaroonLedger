@@ -145,6 +145,7 @@ func buildAIProvider(ctx context.Context) (ai.Provider, error) {
 		return ai.NewBedrock(ctx, ai.BedrockConfig{
 			Region: getEnv("AWS_REGION", "us-east-2"),
 			Model:  os.Getenv("BEDROCK_MODEL"),
+			API:    getEnv("BEDROCK_API", ai.APIMantle),
 		})
 	default:
 		return nil, &configError{"AI_PROVIDER must be 'stub' or 'bedrock', got " + provider}

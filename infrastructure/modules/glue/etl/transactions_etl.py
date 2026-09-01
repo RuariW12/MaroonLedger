@@ -62,58 +62,61 @@ source = glue_context.create_dynamic_frame.from_options(
     transformation_ctx="raw_transactions",
 )
 
+# A quiet day is the normal case, not an error.
+#
+# This previously called sys.exit(0) here. Glue treats any SystemExit raised
+# by the script as a job failure regardless of its exit code, so every night
+# with no new records was reported FAILED -- alarming on a healthy no-op.
+# Guarding the work and falling through to a single job.commit() is both
+# correct and quiet.
 if source.count() == 0:
-    # The normal case for a quiet day. Committing marks the (empty) bookmark
-    # advance and exits without writing an empty partition.
     print("No new records since the last bookmark; nothing to do.")
-    job.commit()
-    sys.exit(0)
+else:
+    df = source.toDF()
 
-df = source.toDF()
+    # A bookmarked read can return a frame missing columns that no record in this
+    # batch happened to carry. Adding them back as typed nulls keeps the Parquet
+    # schema identical across runs, which is what lets Athena read the whole
+    # dataset as one table.
+    for field in RAW_SCHEMA.fields:
+        if field.name not in df.columns:
+            df = df.withColumn(field.name, F.lit(None).cast(field.dataType))
 
-# A bookmarked read can return a frame missing columns that no record in this
-# batch happened to carry. Adding them back as typed nulls keeps the Parquet
-# schema identical across runs, which is what lets Athena read the whole
-# dataset as one table.
-for field in RAW_SCHEMA.fields:
-    if field.name not in df.columns:
-        df = df.withColumn(field.name, F.lit(None).cast(field.dataType))
-
-curated = (
-    df.select([F.col(f.name).cast(f.dataType) for f in RAW_SCHEMA.fields])
-    # Firehose delivers at-least-once, and a client retry can resend a record,
-    # so the same transaction id can legitimately appear twice in raw/.
-    # curated/ is meant to be one row per transaction.
-    .dropDuplicates(["id"])
-    .withColumn("event_ts", F.to_timestamp("timestamp"))
-    # Partition columns must never be null: a null partition key becomes
-    # Hive's __HIVE_DEFAULT_PARTITION__, which partition projection does not
-    # enumerate and Athena therefore cannot see.
-    .withColumn("event_date", F.coalesce(F.to_date("event_ts"), F.current_date()))
-    .withColumn("category", F.coalesce(F.col("category"), F.lit("other")))
-    .withColumn("ai_provider", F.coalesce(F.col("ai_provider"), F.lit("none")))
-    .withColumn("anomaly_severity", F.coalesce(F.col("anomaly_severity"), F.lit("none")))
-    .select(
-        "id",
-        "event_ts",
-        "amount",
-        "ai_provider",
-        "anomaly_severity",
-        "event_date",
-        "category",
+    curated = (
+        df.select([F.col(f.name).cast(f.dataType) for f in RAW_SCHEMA.fields])
+        # Firehose delivers at-least-once, and a client retry can resend a record,
+        # so the same transaction id can legitimately appear twice in raw/.
+        # curated/ is meant to be one row per transaction.
+        .dropDuplicates(["id"])
+        .withColumn("event_ts", F.to_timestamp("timestamp"))
+        # Partition columns must never be null: a null partition key becomes
+        # Hive's __HIVE_DEFAULT_PARTITION__, which partition projection does not
+        # enumerate and Athena therefore cannot see.
+        .withColumn("event_date", F.coalesce(F.to_date("event_ts"), F.current_date()))
+        .withColumn("category", F.coalesce(F.col("category"), F.lit("other")))
+        .withColumn("ai_provider", F.coalesce(F.col("ai_provider"), F.lit("none")))
+        .withColumn("anomaly_severity", F.coalesce(F.col("anomaly_severity"), F.lit("none")))
+        .select(
+            "id",
+            "event_ts",
+            "amount",
+            "ai_provider",
+            "anomaly_severity",
+            "event_date",
+            "category",
+        )
     )
-)
 
-# One file per partition per run. Left unset, Spark writes one file per shuffle
-# partition (200 by default), which at this volume means hundreds of a few-KB
-# Parquet files -- the small-file problem that makes Athena slow and expensive
-# regardless of how little data there is.
-(
-    curated.repartition("event_date", "category")
-    .write.mode("append")
-    .partitionBy("event_date", "category")
-    .option("compression", "snappy")
-    .parquet(args["curated_path"])
-)
+    # One file per partition per run. Left unset, Spark writes one file per shuffle
+    # partition (200 by default), which at this volume means hundreds of a few-KB
+    # Parquet files -- the small-file problem that makes Athena slow and expensive
+    # regardless of how little data there is.
+    (
+        curated.repartition("event_date", "category")
+        .write.mode("append")
+        .partitionBy("event_date", "category")
+        .option("compression", "snappy")
+        .parquet(args["curated_path"])
+    )
 
 job.commit()

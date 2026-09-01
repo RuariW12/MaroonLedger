@@ -1,11 +1,13 @@
+# one() yields null rather than erroring when the module is disabled, so the
+# outputs stay valid in both configurations.
 output "firehose_stream_name" {
-  description = "Set as DATA_PIPELINE_STREAM on the application"
-  value       = module.firehose.stream_name
+  description = "Set as DATA_PIPELINE_STREAM on the application. Null when Firehose is disabled."
+  value       = one(module.firehose[*].stream_name)
 }
 
 output "firehose_stream_arn" {
   description = "Pass to the compute stack as data_pipeline_stream_arn so the ECS task role can write to exactly this stream"
-  value       = module.firehose.stream_arn
+  value       = one(module.firehose[*].stream_arn)
 }
 
 output "datalake_bucket" {

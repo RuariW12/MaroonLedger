@@ -283,11 +283,10 @@ export function CategoryBars({ categories, limit = 6 }) {
   const rows = useMemo(() => {
     if (!categories) return [];
 
-    // Spending only. Income in a "where money went" chart both inflates the
-    // scale and lets a salary read as the largest expense.
+    // The API returns spending only, already positive and income-free, so
+    // there is nothing to filter or flip here -- only to order.
     const spend = categories
-      .filter((c) => c.total < 0)
-      .map((c) => ({ ...c, magnitude: Math.abs(c.total) }))
+      .map((c) => ({ ...c, magnitude: c.total }))
       .sort((a, b) => b.magnitude - a.magnitude);
 
     if (spend.length <= limit) return spend;

@@ -131,7 +131,10 @@ func TestStubAnomalyWithNoHistory(t *testing.T) {
 
 // Income must not be counted as spending, or a salary can be reported as the
 // largest "spending" category and every total is inflated.
-func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
+// Income never reaches the stub as a category: handlers.categoryOutflow filters
+// it out in SQL, and every Total that arrives is a positive amount spent. This
+// pins that contract, since the stub reports whatever it is handed.
+func TestStubInsightsRanksSpendingWithoutIncome(t *testing.T) {
 	summary := SpendingSummary{
 		PeriodStart:  time.Now().AddDate(0, -1, 0),
 		PeriodEnd:    time.Now(),
@@ -139,9 +142,8 @@ func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
 		TotalInflow:  3200,
 		TotalOutflow: 600,
 		ByCategory: []CategorySpend{
-			{Category: "income", Count: 1, Total: 3200},
-			{Category: "groceries", Count: 8, Total: -400},
-			{Category: "dining", Count: 5, Total: -200},
+			{Category: "groceries", Count: 8, Total: 400},
+			{Category: "dining", Count: 5, Total: 200},
 		},
 	}
 
@@ -150,14 +152,15 @@ func TestStubInsightsExcludesIncomeFromSpending(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Groceries (400 of 600 outgoings) is the top spending category, not
-	// income, despite income having the largest absolute value.
 	if want := "Groceries is your largest spending category"; !contains(got.Observations, want) {
 		t.Errorf("observations did not identify groceries as top spend: %v", got.Observations)
 	}
 	for _, o := range got.Observations {
 		if strings.Contains(o, "3200") {
 			t.Errorf("income leaked into a spending observation: %q", o)
+		}
+		if strings.Contains(o, "-$") {
+			t.Errorf("spending rendered as a negative amount: %q", o)
 		}
 	}
 }
@@ -182,4 +185,38 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// The first transaction in a category has no peers to be measured against, so
+// the score falls back to the whole account. The reason text has to say so:
+// claiming "11.3x the usual for housing" when housing had no history at all is
+// a statement about a comparison that never happened.
+func TestStubAnomalyNamesTheBaselineItActuallyUsed(t *testing.T) {
+	baseline := []HistoricalStat{
+		{Category: "groceries", Count: 39, TotalAmount: -1863.55, MeanAmount: -47.78, MaxAmount: -84.20},
+	}
+
+	fellBack, err := NewStub().DetectAnomaly(context.Background(),
+		TransactionInput{Description: "Monthly rent payment", Amount: -1685, AccountType: "checking", Category: "housing"},
+		baseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(fellBack.Reason, "housing") {
+		t.Errorf("named a category with no history as the baseline: %q", fellBack.Reason)
+	}
+	if !strings.Contains(fellBack.Reason, "this account") {
+		t.Errorf("did not disclose the account-wide fallback: %q", fellBack.Reason)
+	}
+
+	// With history in its own category, the comparison is real and named.
+	inCategory, err := NewStub().DetectAnomaly(context.Background(),
+		TransactionInput{Description: "Wire transfer overseas", Amount: -2400, AccountType: "checking", Category: "transfer"},
+		append(baseline, HistoricalStat{Category: "transfer", Count: 3, TotalAmount: 1800, MeanAmount: 600, MaxAmount: 600}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(inCategory.Reason, "transfer") {
+		t.Errorf("did not name the category it compared within: %q", inCategory.Reason)
+	}
 }
