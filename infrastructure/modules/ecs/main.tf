@@ -98,6 +98,29 @@ resource "aws_ecs_service" "app" {
   desired_count   = 2
   launch_type     = "FARGATE"
 
+  # Stop a bad revision instead of letting it sit there.
+  #
+  # Without this, a task definition whose containers never pass the target
+  # group's health check is retried indefinitely: ECS keeps starting tasks,
+  # the ALB keeps failing them, and the service holds at reduced capacity
+  # until someone notices. That is exactly what happened when an image built
+  # without --target shipped the wrong binary, which listened on the wrong
+  # port and failed every check. The service sat at 1/2 for ten minutes.
+  #
+  # With rollback enabled ECS gives up, reverts to the last revision that did
+  # reach steady state, and `aws ecs wait services-stable` returns non-zero,
+  # which is what turns a silent degradation into a failed deploy.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  # Time for the container to start and run migrations before the first health
+  # check counts against it. Without a grace period a slow first start is
+  # indistinguishable from a broken image, and the circuit breaker above would
+  # roll back a deploy that was merely slow.
+  health_check_grace_period_seconds = 60
+
   network_configuration {
     subnets         = var.private_subnet_ids
     security_groups = [var.ecs_security_group_id]

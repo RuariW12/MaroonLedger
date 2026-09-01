@@ -153,5 +153,36 @@ Full walkthrough, schema, cost breakdown and query examples are in
 
 ## CI/CD
 
-A separate repository: GitHub Actions building the image, pushing to ECR,
-deploying to ECS, and invalidating CloudFront.
+Two workflows in `.github/workflows`, authenticating to AWS through OIDC. No
+access key exists in this repository; GitHub mints a short-lived token, AWS
+validates it against an identity provider, and the session expires within the
+hour.
+
+**`ci.yml`** runs on every pull request and needs no credentials at all, so it
+is safe on a fork. It formats, vets and race-tests the Go, builds the frontend
+with warnings as errors, builds and scans the image with Trivy, and validates
+the Terraform with `-backend=false`. One job asserts that a plain `docker build`
+produces the API rather than the development identity provider, which is the
+property stage ordering is supposed to guarantee and which was once wrong.
+
+**`deploy.yml`** runs on a push to `main`. It builds with `--target server`,
+scans before pushing so a failing gate never leaves a vulnerable image in the
+registry, pushes tagged with the commit SHA, registers a task definition by
+editing the current one so Terraform's changes carry forward, and waits for the
+rollout. The frontend job is gated on that rollout, so a failed backend deploy
+cannot leave a new UI talking to an old API.
+
+The ECS service has a deployment circuit breaker with rollback, so a revision
+whose tasks never pass health checks is reverted by ECS rather than sitting at
+reduced capacity, and the wait step turns that into a failed build.
+
+The IAM role the workflows assume is deployed from
+[MaroonLedger-Pipeline](https://github.com/RuariW12/MaroonLedger-Pipeline),
+which owns the trust boundary and nothing else. It has to exist before a
+pipeline can deploy anything, including the stack the pipeline deploys into.
+
+Configuration is one secret (`AWS_ROLE_ARN`) and five repository variables
+(`FRONTEND_BUCKET`, `CF_DISTRIBUTION_ID`, `COGNITO_DOMAIN`, `COGNITO_CLIENT_ID`,
+`APP_URL`). The Cognito values are not secrets: they are public by design and
+ship in the JavaScript bundle. The deploy fails immediately if any is unset,
+rather than publishing a bundle whose sign-in is quietly broken.

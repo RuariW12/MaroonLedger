@@ -1,0 +1,207 @@
+# Build, scan, and deploy on a push to main.
+#
+# This workflow lives here rather than in MaroonLedger-Pipeline because it needs
+# the Dockerfile and the frontend source in its own checkout. The pipeline
+# repository owns the IAM role this assumes, and nothing else.
+#
+# Authentication is OIDC. There is no access key in this repository; GitHub
+# mints a short-lived token, AWS validates it against the OIDC provider, and the
+# session expires within the hour.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required for OIDC. `contents: read` is the default that id-token would
+# otherwise widen, so it is restated rather than inherited.
+permissions:
+  id-token: write
+  contents: read
+
+# One deploy at a time. Without this, two pushes in quick succession race each
+# other onto the same ECS service and the one that finishes second wins,
+# regardless of which commit is newer. Not cancel-in-progress: a half-finished
+# deploy is worse than a queued one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  PROJECT: maroon-ledger
+
+jobs:
+  backend:
+    name: API
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Fail before touching AWS if the repository is not configured, rather
+      # than part-way through a deploy with a confusing error.
+      - name: Check required configuration
+        run: |
+          missing=""
+          [ -n "${{ secrets.AWS_ROLE_ARN }}" ] || missing="$missing AWS_ROLE_ARN(secret)"
+          [ -n "${{ vars.FRONTEND_BUCKET }}" ] || missing="$missing FRONTEND_BUCKET(var)"
+          [ -n "${{ vars.CF_DISTRIBUTION_ID }}" ] || missing="$missing CF_DISTRIBUTION_ID(var)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository configuration:$missing"
+            exit 1
+          fi
+
+      - name: Assume deployment role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # --target server is not optional. The Dockerfile builds two binaries: the
+      # API, and a development identity provider that issues tokens to anyone.
+      # Stage order makes the API the default target, but naming it means a
+      # future reordering cannot quietly ship the wrong one. That has happened.
+      - name: Build image
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/${{ env.PROJECT }}:${{ github.sha }}"
+          docker build \
+            --target server \
+            --platform linux/amd64 \
+            -t "$IMAGE" \
+            ./app
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      # Scans the local image, before the push. Scanning after would mean a
+      # vulnerable image exists in the registry even when the gate fails.
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ steps.build.outputs.image }}
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: table
+
+      - name: Push image
+        run: docker push "${{ steps.build.outputs.image }}"
+
+      # Registers a new revision by editing the current one, so any change made
+      # by Terraform (environment, secrets, roles, resource sizing) is carried
+      # forward rather than overwritten by a definition pinned in CI.
+      - name: Register task definition
+        id: taskdef
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.PROJECT }}-app" \
+            --query taskDefinition > current.json
+
+          jq --arg IMAGE "${{ steps.build.outputs.image }}" '
+            .containerDefinitions[0].image = $IMAGE
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+          ' current.json > next.json
+
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://next.json \
+            --query taskDefinition.taskDefinitionArn --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          echo "Registered $ARN"
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster "${{ env.PROJECT }}-cluster" \
+            --service "${{ env.PROJECT }}-service" \
+            --task-definition "${{ steps.taskdef.outputs.arn }}" \
+            > /dev/null
+
+      # The service has a deployment circuit breaker with rollback enabled, so a
+      # revision whose tasks never pass health checks is rolled back by ECS
+      # rather than sitting at reduced capacity. This wait is what turns that
+      # rollback into a failed build instead of a green one.
+      - name: Wait for rollout
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${{ env.PROJECT }}-cluster" \
+            --services "${{ env.PROJECT }}-service"
+
+      - name: Report deployed revision
+        run: |
+          aws ecs describe-services \
+            --cluster "${{ env.PROJECT }}-cluster" \
+            --services "${{ env.PROJECT }}-service" \
+            --query 'services[0].{task:taskDefinition,running:runningCount,desired:desiredCount}' \
+            --output table
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    # Gated on the API rollout. Publishing a new bundle after a failed or
+    # rolled-back backend deploy leaves a UI talking to an API that does not
+    # match it, which is worse than not deploying at all.
+    needs: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Assume deployment role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # These are compiled into the bundle, so they must be present at build
+      # time rather than supplied later. None is a secret: the client ID and
+      # hosted-UI domain are public by design and ship in the JavaScript. They
+      # are repository variables so that a rebuilt stack with new Cognito IDs is
+      # a settings change rather than a code change.
+      - name: Build
+        working-directory: app/frontend
+        env:
+          CI: 'true'
+          REACT_APP_AUTH_MODE: cognito
+          REACT_APP_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          REACT_APP_COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
+          REACT_APP_REDIRECT_URI: ${{ vars.APP_URL }}
+        run: |
+          for v in REACT_APP_COGNITO_DOMAIN REACT_APP_COGNITO_CLIENT_ID REACT_APP_REDIRECT_URI; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is empty. Sign-in would be broken in the deployed bundle."
+              exit 1
+            fi
+          done
+          npm ci
+          npm run build
+
+      # Hashed assets first with a long cache, then index.html with none. In the
+      # other order a client can fetch the new index.html and then be served the
+      # old bundle it references, which 404s.
+      - name: Publish to S3
+        run: |
+          aws s3 sync app/frontend/build "s3://${{ vars.FRONTEND_BUCKET }}" \
+            --delete --exclude index.html \
+            --cache-control 'public,max-age=31536000,immutable'
+          aws s3 cp app/frontend/build/index.html "s3://${{ vars.FRONTEND_BUCKET }}/index.html" \
+            --cache-control 'no-cache'
+
+      - name: Invalidate CloudFront
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CF_DISTRIBUTION_ID }}" \
+            --paths '/*' --query Invalidation.Id --output text)
+          echo "Invalidation $ID created"

@@ -1,0 +1,135 @@
+# Checks that run on every pull request and every push to main.
+#
+# Deliberately needs no AWS credentials. Nothing here assumes a role, reads a
+# secret, or touches an account, which means it is safe to run on a pull request
+# from a fork. The deployment role is scoped to pushes on main for the same
+# reason.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+
+      - name: Formatting
+        working-directory: app
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        working-directory: app
+        run: go vet ./...
+
+      # Covers JWT verification and its negative cases, the category allowlist
+      # that contains prompt injection, the anomaly baseline logic, and the
+      # analytics event schema. -race because the pipeline emitter and the rate
+      # limiter both hold state across goroutines.
+      - name: Test
+        working-directory: app
+        run: go test -race ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+
+      # CI=true makes react-scripts treat warnings as errors, which is the
+      # behaviour the deploy workflow gets. A build that only passes locally is
+      # not a passing build.
+      - name: Build
+        working-directory: app/frontend
+        env:
+          CI: 'true'
+          REACT_APP_AUTH_MODE: dev
+          REACT_APP_DEV_IDP_URL: http://localhost:9000
+        run: |
+          npm ci
+          npm run build
+
+  image:
+    name: Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Builds without pushing, so a broken Dockerfile fails on the pull request
+      # rather than half-way through a deploy.
+      - name: Build server image
+        run: docker build --target server --platform linux/amd64 -t maroon-ledger:ci ./app
+
+      # Asserts the property that stage ordering is supposed to guarantee: a
+      # build with no --target must produce the API, never the development
+      # identity provider. Ordering alone is a comment; this is a test.
+      - name: Default build target must be the API
+        run: |
+          docker build --platform linux/amd64 -t maroon-ledger:default ./app
+          entrypoint=$(docker inspect maroon-ledger:default --format '{{ index .Config.Entrypoint 0 }}')
+          echo "default entrypoint: $entrypoint"
+          if [ "$entrypoint" != "/app/server" ]; then
+            echo "::error::A plain 'docker build .' produced $entrypoint, not /app/server."
+            exit 1
+          fi
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: maroon-ledger:ci
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: table
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.10.5
+
+      - name: Formatting
+        run: terraform fmt -check -recursive infrastructure
+
+      # -backend=false so validation needs no credentials and no state bucket.
+      - name: Validate
+        run: |
+          for dir in infrastructure/bootstrap \
+                     infrastructure/environments/dev \
+                     infrastructure/environments/data; do
+            echo "== $dir"
+            terraform -chdir="$dir" init -backend=false -input=false > /dev/null
+            terraform -chdir="$dir" validate
+          done

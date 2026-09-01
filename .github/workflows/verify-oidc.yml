@@ -1,0 +1,31 @@
+# Confirms the OIDC trust relationship works, without deploying anything.
+#
+# Run this after applying MaroonLedger-Pipeline, or when a deploy fails at the
+# credentials step and it is not obvious whether the problem is the role, the
+# trust condition, or the secret.
+name: Verify OIDC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      # The ARN comes from the repository secret rather than being written
+      # inline. An earlier version hardcoded it, which put a live account ID in
+      # a public repository.
+      - name: Assume deployment role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+
+      # Prints the assumed-role ARN and the account. Both are already known to
+      # anyone who can read the secret, so this reveals nothing new to the log.
+      - name: Show identity
+        run: aws sts get-caller-identity --output table
