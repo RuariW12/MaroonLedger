@@ -124,12 +124,21 @@ jobs:
         run: terraform fmt -check -recursive infrastructure
 
       # -backend=false so validation needs no credentials and no state bucket.
+      #
+      # init is retried because it reaches registry.terraform.io for the provider
+      # index, and that connection is reset often enough on hosted runners to fail
+      # a build that has nothing wrong with it.
       - name: Validate
         run: |
           for dir in infrastructure/bootstrap \
                      infrastructure/environments/dev \
                      infrastructure/environments/data; do
             echo "== $dir"
-            terraform -chdir="$dir" init -backend=false -input=false > /dev/null
+            for attempt in 1 2 3; do
+              terraform -chdir="$dir" init -backend=false -input=false > /dev/null && break
+              echo "::warning::terraform init failed for $dir (attempt $attempt)"
+              [ "$attempt" = 3 ] && exit 1
+              sleep $((attempt * 10))
+            done
             terraform -chdir="$dir" validate
           done
