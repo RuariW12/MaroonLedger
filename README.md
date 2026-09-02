@@ -22,9 +22,10 @@ that gap: token verification, per-user data scoping enforced in SQL, an AI layer
 with prompt injection in its threat model, a redesigned frontend, and a streaming
 analytics pipeline.
 
-`docs/` holds the detail: `infrastructure.md` service by service,
-`architecture-inventory.md` mapping diagram boxes to Terraform resources, and
-`devlog.md` as the running journal.
+`docs/` holds the detail: `whitepaper.md` is a Well-Architected review with a
+cost model, `infrastructure.md` goes service by service,
+`architecture-inventory.md` maps diagram boxes to Terraform resources, and
+`devlog.md` is the running journal.
 
 ## Features
 

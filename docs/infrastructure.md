@@ -210,8 +210,11 @@ endpoint is specifically required for image pulls to work without NAT, because
 ECR stores layers in S3.
 
 **Why they are off by default.** Interface endpoints bill hourly per endpoint
-per AZ. Seven endpoints across two AZs is roughly $50/month, more than the rest
-of the stack combined at this scale. The Gateway endpoint is free; only the
+per AZ. Seven endpoints across two AZs is fourteen billable attachments at a cent
+an hour, or about $102/month at list price, which is more than the entire rest of
+the deployed stack combined. An earlier version of this line said roughly $50,
+having neglected to multiply by availability zone; the cost model in
+`whitepaper.md` is where that was caught. The Gateway endpoint is free; only the
 interface endpoints carry the cost.
 
 ---
