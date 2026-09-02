@@ -1,14 +1,13 @@
 # Architecture inventory
 
-The diagrams in `docs/images/` are generated from `docs/diagrams/`, and every box
-on them maps to something in `infrastructure/`. This is the mapping, so the
-diagrams can be checked rather than trusted.
+The diagrams are generated from `docs/diagrams/`, and every box maps to something
+in `infrastructure/`. This is the mapping, so they can be checked instead of
+trusted.
 
-It exists because the previous diagram could not be. It showed four EC2
-instances inside the ECS cluster, an Auto Scaling boundary, and one ALB per
-availability zone. None of the three had ever been true. There is no
-`aws_instance`, no `aws_autoscaling_group`, and one `aws_lb`. A diagram nobody
-can check against the code drifts silently, and this one had drifted for months.
+The diagram this replaced could not be checked. It showed four EC2 instances inside
+the ECS cluster, an Auto Scaling boundary, and one ALB per availability zone. None
+had ever been true: there is no `aws_instance`, no `aws_autoscaling_group`, and one
+`aws_lb`. It had drifted for months.
 
 ## Diagram 1: core
 
@@ -69,26 +68,24 @@ module wiring.
 
 ## Deliberately not drawn
 
-Drawing everything is how a diagram becomes unreadable. Left off, with reasons:
+Drawing everything is how a diagram becomes unreadable. Left off:
 
-- **Individual IAM policies.** The roles are drawn; the policies attached to them
-  are not. Which role can reach what is stated on the arrows instead.
-- **S3 bucket sub-resources.** Public-access-block, SSE, ownership controls,
-  versioning, lifecycle. Five resources per bucket that would add five boxes and
-  no understanding.
+- **Individual IAM policies.** Roles are drawn, their policies are not. Which role
+  reaches what is on the arrows.
+- **S3 bucket sub-resources.** Public-access-block, SSE, ownership, versioning,
+  lifecycle: five resources per bucket, five boxes, no understanding.
 - **ACM certificates and their validation records.** Inert until `domain_name`
   is set.
-- **Security group rules as boxes.** SG chaining is the point, so it is drawn as
-  the direction of the arrows between tiers rather than as eight more nodes.
+- **Security group rules as boxes.** Chaining is the point, so it is drawn as arrow
+  direction between tiers, not eight more nodes.
 - **CloudWatch log groups.** Implied by the CloudWatch box.
-- **The bootstrap stack** (state bucket). It exists to make the other stacks
+- **The bootstrap stack.** The state bucket exists to make the other stacks
   possible and is not part of the running architecture.
 
 ## Known divergences from what was actually deployed
 
-The diagrams show the defaults, which is the architecture the repository
-describes. The account it was deployed into is a vended sandbox whose SCPs
-forbid several of them:
+The diagrams show the defaults, which is the architecture the repository describes.
+The sandbox account forbids several:
 
 | Drawn | As deployed | Why |
 |---|---|---|

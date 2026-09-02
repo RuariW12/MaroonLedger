@@ -1,17 +1,16 @@
 # Diagram sources
 
-The architecture diagrams in `docs/images/` are generated, not drawn. Regenerating
-them after an infrastructure change is a code edit, which is the point. The
-previous Lucidchart export drifted until it described a cluster of EC2 instances
-that never existed.
+The architecture diagrams are generated, not drawn, so updating them after an
+infrastructure change is a code edit. The Lucidchart export they replaced drifted
+until it described a cluster of EC2 instances that never existed.
 
 `awsdiag.py` is a small SVG builder: nested frames, icon nodes, and orthogonal
-links with explicit waypoints. Layout is hand-placed rather than solved, because
-Graphviz cannot express AWS Cloud / VPC / subnet containment and that containment
-is most of what these diagrams communicate.
+links with explicit waypoints. Layout is hand-placed, because Graphviz cannot
+express AWS Cloud / VPC / subnet containment, and that containment is most of what
+these diagrams communicate.
 
-Icons are the official AWS architecture set, vendored by the `diagrams` package
-and embedded as base64 so the SVG stands alone.
+Icons are the official AWS set, vendored by the `diagrams` package and embedded as
+base64 so each SVG stands alone.
 
 ```bash
 python3 -m venv .venv

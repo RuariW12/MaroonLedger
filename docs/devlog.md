@@ -324,130 +324,107 @@ to an S3 lake, a nightly Glue PySpark job producing Parquet, Athena on top.
 ## Day 17 - Deploying it, and two bugs found by looking
 
 Deployed both stacks to a real account, seeded a demo dataset, and took
-screenshots. Most of the day was spent on things the deploy surfaced.
+screenshots. Most of the day went on what the deploy surfaced.
 
 - The account is a vended sandbox with SCPs above IAM: EC2 pinned to us-east-2,
   Firehose denied org-wide, GuardDuty denied, WAF denied at CloudFront scope.
-  AdministratorAccess doesn't help, because an SCP sits above IAM and can't be
-  overridden from inside. Turned each into a Terraform variable defaulting to
-  the production-correct value and overrode them in gitignored tfvars, so the
-  repo describes the architecture I'd deploy rather than the one this account
-  permitted.
-- Bedrock inference quota is 0.0 for every Claude model in every region here.
-  The integration is real and `cmd/bedrockcheck` exercises it, but the demo runs
-  the stub. Every result records its provider, so the insights page names the
-  stub instead of quietly implying inference.
-- Reported "INVOKABLE ✓" from a diagnostic whose catch-all case swallowed the
-  actual error. Worth writing down: a diagnostic that can only print success is
-  not a diagnostic.
+  AdministratorAccess does not help, since an SCP sits above IAM. Turned each into
+  a Terraform variable defaulting to the production-correct value and overrode them
+  in gitignored tfvars, so the repo describes the architecture I would deploy.
+- Bedrock inference quota is 0.0 for every Claude model in every region here. The
+  integration is real and `cmd/bedrockcheck` exercises it, but the demo runs the
+  stub. Every result records its provider, so the insights page names the stub
+  instead of implying inference.
+- Reported "INVOKABLE" from a diagnostic whose catch-all case swallowed the actual
+  error. A diagnostic that can only print success is not a diagnostic.
 
-**The $1,800 disagreement.** The dashboard said $10,812 of spending, the
-insights page said $9,012, and the category bars summed to the smaller one. The
-category query summed the *signed* amount per category, so anything with
-movement in both directions reported the difference. Three $600 transfers into
-savings canceled most of a $2,400 outbound wire; the transfer category claimed
-$600 of spending while the anomaly panel a few inches away flagged the $2,400
-wire it had just erased. Every category percentage was inflated to match.
+**The $1,800 disagreement.** The dashboard said $10,812 of spending, the insights
+page said $9,012, and the category bars summed to the smaller one. The category
+query summed the *signed* amount per category, so anything with movement in both
+directions reported the difference. Three $600 transfers into savings cancelled
+most of a $2,400 outbound wire, so the transfer category claimed $600 of spending
+while the anomaly panel flagged the $2,400 wire it had just erased.
 
-The part I want to remember: the fix already existed. `cashflow()` had been
-corrected weeks earlier and carried a comment spelling out exactly why
-per-category nets can't be reused for this. It had never been applied to the
-query directly above it, or to the third copy of the same query in the insights
-handler. A correct comment sitting next to the bug it describes is worth less
-than no comment at all, because it reads as though someone already checked.
+The part worth remembering: the fix already existed. `cashflow()` had been corrected
+weeks earlier and carried a comment spelling out why per-category nets cannot be
+reused. It had never been applied to the query directly above it, or to a third copy
+in the insights handler. A correct comment sitting next to the bug it describes is
+worth less than no comment, because it reads as though someone already checked.
 
 Fixed by aggregating outflows only, so income drops out in SQL instead of being
-filtered by every consumer, and collapsing the three copies into one function.
-Verified against a throwaway Postgres: the old query returns transfer −600
-across 4 rows and lets income in, the new one returns 2400 across 1 row and
-doesn't. No unit test could have caught this. It was found by two numbers on
-screen disagreeing.
+filtered by every consumer, and collapsing three copies into one function. Verified
+against a throwaway Postgres. No unit test could have caught it: it was found by two
+numbers on screen disagreeing.
 
-**A plain `docker build` shipped the wrong binary.** The Dockerfile builds the
-API server and the dev identity provider. `docker build .` with no `--target`
-builds whichever stage is *last*, and devidp was last. The comment at the top of
-the file asserted the opposite. I pushed that image to ECR and the service sat
-at 1/2 for ten minutes while ECS killed task after task for failing health
-checks. The dev IdP listens on 9000 and the target group probes 3000, so it
-never passed and never received traffic.
+**A plain `docker build` shipped the wrong binary.** The Dockerfile builds the API
+and the dev identity provider. `docker build .` with no `--target` builds whichever
+stage is *last*, and devidp was last. The comment at the top of the file claimed the
+opposite. I pushed that image to ECR and the service sat at 1/2 for ten minutes
+while ECS killed task after task for failing health checks, because the dev IdP
+listens on 9000 and the target group probes 3000.
 
 That port mismatch is the only reason this was loud. Had they agreed, a public
-endpoint would have been handing out tokens to anyone who asked. Reordered so
-`server` is last: stage order is the mechanism, not the comment, and the default
-target is now the safe one.
+endpoint would have been handing out tokens. Reordered so `server` is last: stage
+order is the mechanism, not the comment.
 
-- Also fixed the anomaly reason text. When a category has no history the score
-  falls back to an account-wide baseline, but the message still named the
-  category, reporting "11.3x the usual for housing" on the first rent payment when
-  housing had no history at all to be usual about. The message now names the
-  baseline it actually used. Added a test for both branches.
-- Rewrote the README around the story rather than the feature list, and split
-  the data pipeline out into its own doc. The README had grown to the point
-  where a third of it was one subsystem.
+- Also fixed the anomaly reason text. When a category has no history the score falls
+  back to an account-wide baseline, but the message still named the category, so the
+  first rent payment read "11.3x the usual for housing" when housing had no history
+  at all. It now names the baseline it used. Added a test for both branches.
 
 ## Day 18 - Rebuilding, and finding out what the sandbox will not allow
 
 Brought the stack back up to test the CI/CD pipeline end to end. 85 resources,
-including the two things added while writing the workflows: an ECR lifecycle
-policy and a deployment circuit breaker.
+including an ECR lifecycle policy and a deployment circuit breaker added while
+writing the workflows.
 
-**The deploy path works.** Ran every step of deploy.yml by hand against the live
-stack, since the workflow itself could not authenticate. Build with
-`--target server`, Trivy scan (zero findings after the earlier CVE work), push
-tagged by commit SHA, register a task definition by editing the current one,
-update the service, wait for stable. Two of two healthy in 75 seconds. The
-frontend built with the real Cognito values, synced with the split cache policy
-(hashed assets immutable, index.html no-cache), and the client ID was confirmed
-compiled into the served bundle.
+**The deploy path works.** Ran every step of deploy.yml by hand, since the workflow
+itself could not authenticate. Build with `--target server`, Trivy scan (zero
+findings after the earlier CVE work), push tagged by commit SHA, register a task
+definition by editing the current one, update the service, wait for stable. Two of
+two healthy in 75 seconds. The frontend built with the real Cognito values and the
+client ID was confirmed compiled into the served bundle.
 
 Running it by hand found a bug the workflow would have hidden.
-`aws ecs describe-task-definition --query taskDefinition > current.json` relies
-on the CLI's configured default output format. GitHub runners default to json so
-it would have passed there; my machine has none configured, and it wrote
-"Unknown output type: None" into the file that jq then tried to parse. Fixed
-with an explicit `--output json`. The lesson is narrow but real: a step whose
-output is parsed should not depend on ambient client configuration.
+`aws ecs describe-task-definition --query taskDefinition > current.json` relies on
+the CLI's configured default output format. GitHub runners default to json so it
+would have passed there; my machine has none set, and it wrote "Unknown output type:
+None" into the file jq then parsed. Fixed with an explicit `--output json`. A step
+whose output is parsed should not depend on ambient client configuration.
 
-**The circuit breaker works.** Tested it rather than trusting the config.
-Deployed the devidp image on purpose, which listens on 9000 while the target
-group probes 3000, so it can never pass a health check. Tasks started, failed,
-were killed and restarted, and after several cycles ECS reported
-`deployment circuit breaker: rolling back to deploymentId ...` and returned the
-service to the previous revision without intervention. The whole time the API
-answered 401 to unauthenticated requests, which is correct, because
-minimumHealthyPercent at 100 keeps the working tasks in the target group until
-replacements are healthy. Zero downtime for a deployment that failed completely.
+**The circuit breaker works.** Tested it instead of trusting the config. Deployed the
+devidp image on purpose, which listens on 9000 while the target group probes 3000.
+Tasks started, failed, were killed and restarted, and after several cycles ECS
+reported `deployment circuit breaker: rolling back` and returned the service to the
+previous revision unattended. The API answered 401 to unauthenticated requests
+throughout, because minimumHealthyPercent at 100 keeps working tasks in the target
+group until replacements are healthy. Zero downtime for a deployment that failed
+completely.
 
-It is slower than expected. Each failed task has to drain through the target
-group's deregistration delay before the next attempt counts, so the breaker took
-about twelve minutes to trip rather than the couple I assumed.
+It is slower than expected: about twelve minutes, not the two or three I assumed,
+because each failed task drains through the deregistration delay before the next
+attempt counts.
 
 **OIDC cannot work in this account.** The apply failed on
-iam:CreateOpenIDConnectProvider, denied by service control policy. Importing the
-existing one was not possible either, because the same policy denies
-iam:ListOpenIDConnectProviders, so there was no way to discover whether one was
-there.
+`iam:CreateOpenIDConnectProvider`, denied by SCP. Importing the existing one was not
+possible either, since the same policy denies `iam:ListOpenIDConnectProviders`.
 
-Worked out that one was, without being able to list it: creating an IAM role
-with the provider ARN as a federated principal succeeded, and AWS validates that
-ARN while parsing the trust policy, so acceptance proves existence. Added a
-create_oidc_provider flag, defaulting to true, and derived the ARN from the
-account ID when false. This is the same pattern the application stack already
-uses for WAF, GuardDuty and Firehose.
+Worked out that one existed anyway: creating an IAM role with the provider ARN as a
+federated principal succeeded, and AWS validates that ARN while parsing the trust
+policy, so acceptance proves existence. Added a `create_oidc_provider` flag,
+defaulting to true, deriving the ARN from the account ID when false.
 
-That got the role created, and the workflow still failed:
-"The web identity token provided could not be validated." Almost certainly the
-pre-existing provider's audience list does not include sts.amazonaws.com. I
-cannot confirm it, because GetOpenIDConnectProvider is denied, and I cannot fix
-it, because AddClientIDToOpenIDConnectProvider is denied too. Every operation on
-an OIDC provider is blocked in this account, not just creation.
+That got the role created, and the workflow still failed with "The web identity
+token provided could not be validated". Almost certainly the existing provider's
+audience list omits `sts.amazonaws.com`. I cannot confirm it, because
+`GetOpenIDConnectProvider` is denied, and cannot fix it, because
+`AddClientIDToOpenIDConnectProvider` is denied too.
 
 I had already told myself OIDC was possible on the strength of the provider
-existing. That was premature: existence is not usability, and the second half of
-the check was the half that mattered.
+existing. That was premature: existence is not usability, and the second half of the
+check was the half that mattered.
 
-The alternative was an IAM access key in GitHub secrets, which would have made
-the workflow green. Not worth it. The whole point of the OIDC design is that no
-long-lived credential exists, and putting one in a public repository to earn a
-checkmark would be trading the actual security property for the appearance of
-it. deploy.yml stays gated, CI stays green, and the constraint is written down.
+The alternative was an IAM access key in GitHub secrets, which would have made the
+workflow green. Not worth it. The point of the OIDC design is that no long-lived
+credential exists, and putting one in a public repository to earn a checkmark trades
+the security property for the appearance of it.
