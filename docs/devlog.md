@@ -384,3 +384,70 @@ target is now the safe one.
 - Rewrote the README around the story rather than the feature list, and split
   the data pipeline out into its own doc. The README had grown to the point
   where a third of it was one subsystem.
+
+## Day 18 - Rebuilding, and finding out what the sandbox will not allow
+
+Brought the stack back up to test the CI/CD pipeline end to end. 85 resources,
+including the two things added while writing the workflows: an ECR lifecycle
+policy and a deployment circuit breaker.
+
+**The deploy path works.** Ran every step of deploy.yml by hand against the live
+stack, since the workflow itself could not authenticate. Build with
+`--target server`, Trivy scan (zero findings after the earlier CVE work), push
+tagged by commit SHA, register a task definition by editing the current one,
+update the service, wait for stable. Two of two healthy in 75 seconds. The
+frontend built with the real Cognito values, synced with the split cache policy
+(hashed assets immutable, index.html no-cache), and the client ID was confirmed
+compiled into the served bundle.
+
+Running it by hand found a bug the workflow would have hidden.
+`aws ecs describe-task-definition --query taskDefinition > current.json` relies
+on the CLI's configured default output format. GitHub runners default to json so
+it would have passed there; my machine has none configured, and it wrote
+"Unknown output type: None" into the file that jq then tried to parse. Fixed
+with an explicit `--output json`. The lesson is narrow but real: a step whose
+output is parsed should not depend on ambient client configuration.
+
+**The circuit breaker works.** Tested it rather than trusting the config.
+Deployed the devidp image on purpose, which listens on 9000 while the target
+group probes 3000, so it can never pass a health check. Tasks started, failed,
+were killed and restarted, and after several cycles ECS reported
+`deployment circuit breaker: rolling back to deploymentId ...` and returned the
+service to the previous revision without intervention. The whole time the API
+answered 401 to unauthenticated requests, which is correct, because
+minimumHealthyPercent at 100 keeps the working tasks in the target group until
+replacements are healthy. Zero downtime for a deployment that failed completely.
+
+It is slower than expected. Each failed task has to drain through the target
+group's deregistration delay before the next attempt counts, so the breaker took
+about twelve minutes to trip rather than the couple I assumed.
+
+**OIDC cannot work in this account.** The apply failed on
+iam:CreateOpenIDConnectProvider, denied by service control policy. Importing the
+existing one was not possible either, because the same policy denies
+iam:ListOpenIDConnectProviders, so there was no way to discover whether one was
+there.
+
+Worked out that one was, without being able to list it: creating an IAM role
+with the provider ARN as a federated principal succeeded, and AWS validates that
+ARN while parsing the trust policy, so acceptance proves existence. Added a
+create_oidc_provider flag, defaulting to true, and derived the ARN from the
+account ID when false. This is the same pattern the application stack already
+uses for WAF, GuardDuty and Firehose.
+
+That got the role created, and the workflow still failed:
+"The web identity token provided could not be validated." Almost certainly the
+pre-existing provider's audience list does not include sts.amazonaws.com. I
+cannot confirm it, because GetOpenIDConnectProvider is denied, and I cannot fix
+it, because AddClientIDToOpenIDConnectProvider is denied too. Every operation on
+an OIDC provider is blocked in this account, not just creation.
+
+I had already told myself OIDC was possible on the strength of the provider
+existing. That was premature: existence is not usability, and the second half of
+the check was the half that mattered.
+
+The alternative was an IAM access key in GitHub secrets, which would have made
+the workflow green. Not worth it. The whole point of the OIDC design is that no
+long-lived credential exists, and putting one in a public repository to earn a
+checkmark would be trading the actual security property for the appearance of
+it. deploy.yml stays gated, CI stays green, and the constraint is written down.

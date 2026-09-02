@@ -150,6 +150,15 @@ Full walkthrough, schema, cost breakdown and query examples are in
 - The deployment account is a vended sandbox whose SCPs block Firehose,
   GuardDuty and CloudFront-scope WAF. Those stay variables defaulting to on,
   overridden only in gitignored tfvars.
+- **OIDC federation cannot be established in that account**, so `deploy.yml`
+  has never run from GitHub. The same SCP denies every `iam:*OpenIDConnect*`
+  action: create, list, get and add-client-id. A provider does exist there,
+  proven by AWS accepting its ARN as a federated principal when the role is
+  created, but it cannot be read or amended, and a token minted for
+  `sts.amazonaws.com` is rejected. The workflow's logic is not unverified:
+  every step was run by hand against the live stack, which built, scanned,
+  pushed, registered a task definition and rolled the service to 2/2. Only the
+  handshake is untested.
 
 ## CI/CD
 
@@ -176,6 +185,14 @@ The ECS service has a deployment circuit breaker with rollback, so a revision
 whose tasks never pass health checks is reverted by ECS rather than sitting at
 reduced capacity, and the wait step turns that into a failed build.
 
+That was verified rather than assumed. Deploying a deliberately broken image,
+the dev identity provider, which listens on 9000 while the target group probes
+3000, produced the intended sequence: tasks started and failed health checks,
+ECS reported `deployment circuit breaker: rolling back`, and the service
+returned to the previous revision on its own. The API answered correctly
+throughout, because `minimumHealthyPercent` at 100 keeps the working tasks
+serving until replacements are healthy.
+
 The IAM role the workflows assume is deployed from
 [MaroonLedger-Pipeline](https://github.com/RuariW12/MaroonLedger-Pipeline),
 which owns the trust boundary and nothing else. It has to exist before a
@@ -184,5 +201,8 @@ pipeline can deploy anything, including the stack the pipeline deploys into.
 Configuration is one secret (`AWS_ROLE_ARN`) and five repository variables
 (`FRONTEND_BUCKET`, `CF_DISTRIBUTION_ID`, `COGNITO_DOMAIN`, `COGNITO_CLIENT_ID`,
 `APP_URL`). The Cognito values are not secrets: they are public by design and
-ship in the JavaScript bundle. The deploy fails immediately if any is unset,
-rather than publishing a bundle whose sign-in is quietly broken.
+ship in the JavaScript bundle. `deploy.yml` skips entirely until
+`FRONTEND_BUCKET` is set, because the stack is torn down between demos and a
+workflow with nothing to deploy into should not fail on every push. Anything
+else missing fails the job immediately rather than publishing a bundle whose
+sign-in is quietly broken.
