@@ -35,3 +35,13 @@ __pycache__/
 # breaks the build with redeclaration errors, and Terraform loads every .tf.
 * [0-9].*
 * [0-9]
+
+# Credential material. None of this has ever been committed; the patterns exist
+# so that an accident is caught by git rather than by a scan afterwards.
+*.pem
+*.key
+*credentials*
+id_rsa*
+.aws/
+*.p12
+*.pfx
