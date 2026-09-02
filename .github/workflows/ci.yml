@@ -65,7 +65,7 @@ jobs:
           cache-dependency-path: app/frontend/package-lock.json
 
       # CI=true makes react-scripts treat warnings as errors, which is the
-      # behaviour the deploy workflow gets. A build that only passes locally is
+      # behavior the deploy workflow gets. A build that only passes locally is
       # not a passing build.
       - name: Build
         working-directory: app/frontend
