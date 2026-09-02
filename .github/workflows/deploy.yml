@@ -107,7 +107,7 @@ jobs:
         run: |
           aws ecs describe-task-definition \
             --task-definition "${{ env.PROJECT }}-app" \
-            --query taskDefinition > current.json
+            --query taskDefinition --output json > current.json
 
           jq --arg IMAGE "${{ steps.build.outputs.image }}" '
             .containerDefinitions[0].image = $IMAGE
